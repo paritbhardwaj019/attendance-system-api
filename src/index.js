@@ -22,7 +22,7 @@ const exitHandler = () => {
   if (server) {
     server.close(async () => {
       logger.info('Server closed');
-      await prisma.$disconnect();
+      await db.$disconnect();
       process.exit(1);
     });
   } else {

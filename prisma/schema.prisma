@@ -189,6 +189,8 @@ model Attendance {
   date          DateTime
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+
+  @@unique([labourId, date], name: "labourId_date")
 }
 
 model Visitor {
