@@ -46,6 +46,7 @@ const loginWithUserNameHandler = async (data) => {
       mobile_number: true,
       name: true,
       username: true,
+      id: true,
     },
   });
 
