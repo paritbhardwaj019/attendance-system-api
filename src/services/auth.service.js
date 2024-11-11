@@ -1,99 +1,121 @@
 const httpStatus = require('http-status');
-const tokenService = require('./token.service');
-const userService = require('./user.service');
-const Token = require('../models/token.model');
+const db = require('../database/prisma');
 const ApiError = require('../utils/ApiError');
-const { tokenTypes } = require('../config/tokens');
+const { createToken, comparePassword, verifyToken } = require('../utils/utils');
+const config = require('../config/config');
 
 /**
- * Login with username and password
- * @param {string} email
- * @param {string} password
- * @returns {Promise<User>}
+ * Generates a JWT access token.
+ * @param {Object} payload - The payload to encode in the token (e.g., userId and role).
+ * @returns {string} - Returns the generated access token.
  */
-const loginUserWithEmailAndPassword = async (email, password) => {
-  const user = await userService.getUserByEmail(email);
-  if (!user || !(await user.isPasswordMatch(password))) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'Incorrect email or password');
-  }
-  return user;
+
+function generateAccessToken(payload) {
+  return createToken(payload, config.jwt.secret, '15m');
+}
+
+/**
+ * Generates a JWT refresh token.
+ * @param {Object} payload - The payload to encode in the token (e.g., userId).
+ * @returns {string} - Returns the generated refresh token.
+ */
+
+function generateRefreshToken(payload) {
+  return createToken(payload, config.jwt.refreshTokenSecret, '7d');
+}
+
+/**
+ * Authenticates a user by checking their username and password.
+ * @param {<Object>} data - Consists of username and password in the body
+ * @returns {Promise<Object>} - Returns an object containing user ID, user type, and auth token.
+ * @throws {Error} - Throws an error if credentials are invalid.
+ */
+
+const loginWithUserNameHandler = async (data) => {
+  const user = await db.user.findUnique({
+    where: {
+      username: data.username,
+    },
+    select: {
+      role: {
+        select: {
+          name: true,
+        },
+      },
+      password: true,
+      mobile_number: true,
+      name: true,
+      username: true,
+    },
+  });
+
+  if (!user || !user.password) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid credentials');
+
+  const isPasswordMatch = comparePassword(data.password, user.password);
+
+  if (!isPasswordMatch) throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid credentials');
+
+  const accessToken = generateAccessToken({
+    id: user.id,
+    role: user.role.name,
+  });
+
+  const refreshToken = generateRefreshToken({
+    id: user.id,
+  });
+
+  await db.user.update({
+    where: {
+      id: user.id,
+    },
+    data: {
+      refreshToken,
+    },
+  });
+
+  delete user.password;
+
+  return { user, accessToken, refreshToken };
 };
 
 /**
- * Logout
- * @param {string} refreshToken
- * @returns {Promise}
+ * Verifies and refreshes the access token using a valid refresh token.
+ * @param {string} refreshToken - The refresh token to verify and use for refreshing.
+ * @returns {Promise<Object>} - Returns a new access token.
+ * @throws {Error} - Throws an error if the refresh token is invalid or expired.
  */
-const logout = async (refreshToken) => {
-  const refreshTokenDoc = await Token.findOne({ token: refreshToken, type: tokenTypes.REFRESH, blacklisted: false });
-  if (!refreshTokenDoc) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Not found');
-  }
-  await refreshTokenDoc.remove();
+
+const refreshAccessTokenHandler = async (refreshToken) => {
+  const decodedToken = verifyToken(refreshToken, config.jwt.refreshTokenSecret);
+
+  const user = await db.user.findUnique({ where: { id: decodedToken.id }, include: { role: true } });
+
+  if (!user || user.refreshToken !== refreshToken) throw new ApiError('Invalid refresh token');
+
+  const newAccessToken = generateAccessToken({
+    id: user.id,
+    role: user.role.name,
+  });
+
+  const newRefreshToken = generateRefreshToken({
+    id: user.id,
+  });
+
+  await db.user.update({
+    where: {
+      id: user.id,
+    },
+    data: {
+      refreshToken,
+    },
+  });
+
+  return { accessToken: newAccessToken, refreshToken: newRefreshToken };
 };
 
-/**
- * Refresh auth tokens
- * @param {string} refreshToken
- * @returns {Promise<Object>}
- */
-const refreshAuth = async (refreshToken) => {
-  try {
-    const refreshTokenDoc = await tokenService.verifyToken(refreshToken, tokenTypes.REFRESH);
-    const user = await userService.getUserById(refreshTokenDoc.user);
-    if (!user) {
-      throw new Error();
-    }
-    await refreshTokenDoc.remove();
-    return tokenService.generateAuthTokens(user);
-  } catch (error) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'Please authenticate');
-  }
+const authService = {
+  loginWithUserNameHandler,
+  refreshAccessTokenHandler,
 };
 
-/**
- * Reset password
- * @param {string} resetPasswordToken
- * @param {string} newPassword
- * @returns {Promise}
- */
-const resetPassword = async (resetPasswordToken, newPassword) => {
-  try {
-    const resetPasswordTokenDoc = await tokenService.verifyToken(resetPasswordToken, tokenTypes.RESET_PASSWORD);
-    const user = await userService.getUserById(resetPasswordTokenDoc.user);
-    if (!user) {
-      throw new Error();
-    }
-    await userService.updateUserById(user.id, { password: newPassword });
-    await Token.deleteMany({ user: user.id, type: tokenTypes.RESET_PASSWORD });
-  } catch (error) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'Password reset failed');
-  }
-};
-
-/**
- * Verify email
- * @param {string} verifyEmailToken
- * @returns {Promise}
- */
-const verifyEmail = async (verifyEmailToken) => {
-  try {
-    const verifyEmailTokenDoc = await tokenService.verifyToken(verifyEmailToken, tokenTypes.VERIFY_EMAIL);
-    const user = await userService.getUserById(verifyEmailTokenDoc.user);
-    if (!user) {
-      throw new Error();
-    }
-    await Token.deleteMany({ user: user.id, type: tokenTypes.VERIFY_EMAIL });
-    await userService.updateUserById(user.id, { isEmailVerified: true });
-  } catch (error) {
-    throw new ApiError(httpStatus.UNAUTHORIZED, 'Email verification failed');
-  }
-};
-
-module.exports = {
-  loginUserWithEmailAndPassword,
-  logout,
-  refreshAuth,
-  resetPassword,
-  verifyEmail,
-};
+module.exports = authService;

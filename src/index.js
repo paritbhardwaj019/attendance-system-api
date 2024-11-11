@@ -1,24 +1,34 @@
-const mongoose = require('mongoose');
+require('dotenv').config();
 const app = require('./app');
 const config = require('./config/config');
 const logger = require('./config/logger');
+const db = require('./database/prisma');
 
 let server;
-mongoose.connect(config.mongoose.url, config.mongoose.options).then(() => {
-  logger.info('Connected to MongoDB');
-  server = app.listen(config.port, () => {
-    logger.info(`Listening to port ${config.port}`);
+
+db.$connect()
+  .then(() => {
+    logger.info('Connected to MySQL database');
+    server = app.listen(config.port, () => {
+      logger.info(`Listening to port ${config.port}`);
+    });
+  })
+  .catch((error) => {
+    logger.error('Failed to connect to the database', error);
+    process.exit(1);
   });
-});
 
 const exitHandler = () => {
   if (server) {
-    server.close(() => {
+    server.close(async () => {
       logger.info('Server closed');
+      await prisma.$disconnect();
       process.exit(1);
     });
   } else {
-    process.exit(1);
+    db.$disconnect().then(() => {
+      process.exit(1);
+    });
   }
 };
 
@@ -33,6 +43,11 @@ process.on('unhandledRejection', unexpectedErrorHandler);
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received');
   if (server) {
-    server.close();
+    server.close(async () => {
+      logger.info('Server closed');
+      await db.$disconnect();
+    });
+  } else {
+    db.$disconnect();
   }
 });

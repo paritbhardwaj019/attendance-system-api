@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id    Int     @id @default(autoincrement())
+  name  String  @unique
+  users User[]
+}
+
+model User {
+  id             Int        @id @default(autoincrement())
+  name           String
+  username       String     @unique
+  password       String
+  mobile_number  String
+
+  roleId         Int
+  role           Role       @relation(fields: [roleId], references: [id])
+
+  refreshToken String?
+
+  admin          Admin?
+  manager        Manager?
+  contractor     Contractor?
+  staff          Staff?
+
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model Admin {
+  id     Int   @id @default(autoincrement())
+  user   User  @relation(fields: [userId], references: [id])
+  userId Int   @unique
+}
+
+model Manager {
+  id          Int           @id @default(autoincrement())
+  user        User          @relation(fields: [userId], references: [id])
+  userId      Int           @unique
+  contractors Contractor[]
+}
+
+model Contractor {
+  id          Int           @id @default(autoincrement())
+  user        User          @relation(fields: [userId], references: [id])
+  userId      Int           @unique
+  firm_name   String?
+  manager     Manager?      @relation(fields: [managerId], references: [id])
+  managerId   Int?
+  staff       Staff[]
+}
+
+model Staff {
+  id               Int           @id @default(autoincrement())
+  user             User          @relation(fields: [userId], references: [id])
+  userId           Int           @unique
+  contractor       Contractor    @relation(fields: [contractorId], references: [id])
+  contractorId     Int
+  fingerprint_data String
+  attendance       Attendance[]
+}
+
+model Attendance {
+  id               Int      @id @default(autoincrement())
+  staff            Staff    @relation(fields: [staffId], references: [id])
+  staffId          Int
+  
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime          @updatedAt
+}
