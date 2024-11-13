@@ -1,264 +1,184 @@
 const httpStatus = require('http-status');
 const db = require('../database/prisma');
 const ApiError = require('../utils/ApiError');
-const generatePassword = require('generate-password');
-const { roles } = require('../config/roles');
+const bcrypt = require('bcryptjs');
 
 /**
- * Creates a new user with role-specific records.
- * @param {Object} data - The user data from the request body.
- * @returns {Promise<Object>} - The created user object.
- * @throws {ApiError} - If the user already exists or if creation fails.
+ * Creates a new user with the specified role.
+ * @param {Object} data - User data including role-specific fields.
+ * @param {number} createdBy - ID of the admin creating the user.
+ * @returns {Promise<Object>} - Returns the created user.
+ * @throws {Error} - Throws an error if user type is invalid or creation fails.
  */
 
-const createUserHandler = async (data) => {
-  const { name, username, roleId, mobile_number, firm_name, contractorId, fingerprint_data } = data;
+const createUser = async (data, loggedInUser) => {
+  const { name, username, password, user_type, mobile_number, firm_name, manager_id, contractor_id, fingerprint_data } =
+    data;
 
-  const doesExist = await db.user.findUnique({
-    where: {
-      username: username,
-    },
-  });
-
-  if (doesExist) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'User already exists');
-  }
-
-  const password = generatePassword.generate({
-    length: 10,
-    numbers: true,
-    symbols: true,
-    uppercase: true,
-    lowercase: true,
-  });
+  const hashedPassword = await bcrypt.hash(password, 10);
 
   const role = await db.role.findUnique({
-    where: { id: roleId },
-    select: { name: true },
+    where: { name: user_type },
   });
 
   if (!role) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid roleId provided');
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user type');
   }
 
-  const roleName = role.name;
-
-  const result = await db.$transaction(async (prisma) => {
-    const user = await prisma.user.create({
-      data: {
-        name,
-        username,
-        password,
-        mobile_number,
-        role: {
-          connect: { id: roleId },
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        username: true,
-        role: {
-          select: {
-            name: true,
-          },
-        },
-      },
-    });
-
-    switch (roleName) {
-      case roles.manager:
-        await prisma.manager.create({
-          data: {
-            userId: user.id,
-          },
-        });
-        break;
-
-      case roles.contractor:
-        await prisma.contractor.create({
-          data: {
-            userId: user.id,
+  let roleSpecificData = {};
+  switch (user_type) {
+    case 'Admin':
+      roleSpecificData = { admin: {} };
+      break;
+    case 'Manager':
+      roleSpecificData = { manager: {} };
+      break;
+    case 'Contractor':
+      roleSpecificData = {
+        contractor: {
+          create: {
             firm_name: firm_name || null,
-            managerId: contractorId || null,
+            managerId: manager_id || null,
           },
-        });
-        break;
-
-      case roles.staff:
-        if (!contractorId) {
-          throw new ApiError(httpStatus.BAD_REQUEST, 'contractorId is required for Staff');
-        }
-
-        const contractor = await prisma.contractor.findUnique({
-          where: { id: contractorId },
-        });
-
-        if (!contractor) {
-          throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid contractorId provided');
-        }
-
-        await prisma.staff.create({
-          data: {
-            userId: user.id,
-            contractorId: contractorId,
-            fingerprint_data: fingerprint_data || '',
+        },
+      };
+      break;
+    case 'Staff':
+      roleSpecificData = {
+        staff: {
+          create: {
+            contractorId: contractor_id,
+            fingerprint_data,
           },
-        });
-        break;
+        },
+      };
+      break;
+    default:
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user type');
+  }
 
-      default:
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid role');
-    }
-
-    // TODO: SEND EMAIL CREDS (password)
-
-    return { user };
+  const newUser = await db.user.create({
+    data: {
+      name,
+      username,
+      password: hashedPassword,
+      mobile_number: mobile_number || null,
+      roleId: role.id,
+      ...roleSpecificData,
+    },
+    include: {
+      role: true,
+      admin: true,
+      manager: true,
+      contractor: true,
+      staff: true,
+    },
   });
 
-  return result;
+  return newUser;
 };
 
 /**
- * Fetches all users with pagination for Admin role.
- * @param {number} page - Current page number.
- * @param {number} limit - Number of users per page.
- * @returns {Promise<Object>} - Paginated users and metadata.
+ * Deletes a user by ID.
+ * @param {number} id - ID of the user to delete.
+ * @returns {Promise<Object>} - Returns a success message.
+ * @throws {Error} - Throws an error if user is not found.
  */
 
-const fetchAllUsersForAdmin = async (page, limit) => {
-  const skip = (page - 1) * limit;
+const deleteUser = async (id) => {
+  const user = await db.user.findUnique({
+    where: { id: id },
+  });
 
-  const [totalUsers, allUsers] = await db.$transaction([
-    db.user.count(),
-    db.user.findMany({
-      skip,
-      take: limit,
-      include: {
-        role: true,
-        admin: true,
-        manager: true,
-        contractor: true,
-        staff: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    }),
-  ]);
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
 
-  const totalPages = Math.ceil(totalUsers / limit);
+  await db.user.delete({
+    where: { id: id },
+  });
 
-  return {
-    data: allUsers,
-    meta: {
-      total: totalUsers,
-      page,
-      limit,
-      totalPages,
-    },
-  };
+  return { message: 'User deleted successfully' };
 };
 
 /**
- * Fetches Contractors managed by a specific Manager with pagination.
- * @param {number} id - ID of loggedIn user.
- * @param {number} page - Current page number.
- * @param {number} limit - Number of contractors per page.
- * @returns {Promise<Object>} - Paginated contractors and metadata.
+ * Retrieves user details by ID.
+ * @param {number} id - ID of the user to retrieve.
+ * @returns {Promise<Object>} - Returns the user details.
+ * @throws {Error} - Throws an error if user is not found.
  */
-
-const fetchAllContractorsForManager = async (page, limit, id) => {
-  const skip = (page - 1) * limit;
-
-  const [totalContractors, allContractors] = await db.$transaction([
-    db.contractor.count({
-      where: {
-        manager: {
-          id,
-        },
+const getUserDetails = async (id) => {
+  const user = await db.user.findUnique({
+    where: { id: id },
+    include: {
+      role: true,
+      admin: true,
+      manager: {
+        include: { contractors: true },
       },
-    }),
-    db.contractor.findMany({
-      where: {
-        manager: {
-          id,
-        },
+      contractor: {
+        include: { manager: true, staff: true },
       },
-      skip,
-      take: limit,
-      include: {
-        user: true,
-        staff: true,
-        manager: {
-          include: { user: true },
-        },
+      staff: {
+        include: { contractor: true },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    }),
-  ]);
-
-  const totalPages = Math.ceil(totalContractors / limit);
-
-  return {
-    data: allContractors,
-    meta: {
-      total: totalContractors,
-      page,
-      limit,
-      totalPages,
     },
-  };
+  });
+
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+
+  return user;
 };
 
 /**
- * Fetches Staff managed by a specific Contractor with pagination.
- * @param {number} id - ID of the Contractor.
- * @param {number} page - Current page number.
- * @param {number} limit - Number of staff per page.
- * @returns {Promise<Object>} - Paginated staff and metadata.
+ * Lists users with optional filtering and pagination.
+ * @param {Object} filters - Filters for user type and search term.
+ * @param {Object} pagination - Pagination options including page and limit.
+ * @returns {Promise<Object>} - Returns a paginated list of users.
  */
 
-const fetchAllStaffForContractor = async (id, page, limit) => {
-  const skip = (page - 1) * limit;
+const listUsers = async (filters, pagination) => {
+  const { skip, take, page } = pagination;
+  const { user_type, search } = filters;
 
-  const [totalStaff, allStaff] = await db.$transaction([
-    await db.staff.count({
-      where: {
-        contractor: {
-          id,
-        },
-      },
-    }),
-    await db.staff.findMany({
-      skip,
-      take: limit,
-      include: {
-        user: true,
-        contractor: {
-          include: { user: true },
-        },
-        attendance: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    }),
-  ]);
+  const where = {};
 
-  const totalPages = Math.ceil(total / limit);
+  if (user_type) {
+    const role = await db.role.findUnique({ where: { name: user_type } });
+    if (role) {
+      where.roleId = role.id;
+    }
+  }
+
+  if (search) {
+    where.name = { contains: search, mode: 'insensitive' };
+  }
+
+  const users = await db.user.findMany({
+    where,
+    skip,
+    take,
+    include: { role: true },
+  });
+
+  const total = await db.user.count({ where });
 
   return {
-    data: allStaff,
-    meta: {
-      total: totalStaff,
-      page,
-      limit,
-      totalPages,
-    },
+    data: users,
+    total,
+    page,
+    limit: take,
+    totalPages: Math.ceil(total / take),
   };
 };
 
-const userService = { createUserHandler, fetchAllUsersForAdmin, fetchAllContractorsForManager, fetchAllStaffForContractor };
+const userService = {
+  createUser,
+  deleteUser,
+  getUserDetails,
+  listUsers,
+};
 
 module.exports = userService;
