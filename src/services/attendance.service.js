@@ -3,43 +3,79 @@ const db = require('../database/prisma');
 const ApiError = require('../utils/ApiError');
 
 /**
- * Records attendance for a staff member using fingerprint data.
- * @param {number} managerId - ID of the manager recording the attendance.
- * @param {Object} data - Attendance data including staff_id, fingerprint_data, and timestamp.
- * @returns {Promise<Object>} - Returns the recorded attendance.
- * @throws {Error} - Throws an error if staff not found or fingerprint mismatch.
+ * Record attendance for a staff member
+ * @param {number} staffId - ID of the staff member (Staff.id)
+ * @param {string} fingerprint_data - Fingerprint data for verification
+ * @returns {Object} Created attendance record
  */
-const recordAttendance = async (managerId, data) => {
-  const { staff_id, fingerprint_data, timestamp } = data;
 
-  // Verify the staff belongs to a contractor under this manager
+const recordAttendance = async (staffId, fingerprint_data) => {
   const staff = await db.staff.findUnique({
-    where: { id: staff_id },
-    include: { contractor: true },
+    where: { userId: staffId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          role: true,
+        },
+      },
+    },
   });
 
   if (!staff) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Staff not found');
   }
 
-  const contractor = await db.contractor.findUnique({
-    where: { id: staff.contractorId },
-  });
-
-  if (!contractor || contractor.managerId !== managerId) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Staff does not belong to this manager');
-  }
-
-  // Verify fingerprint data matches
   if (staff.fingerprint_data !== fingerprint_data) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid fingerprint data');
   }
 
-  // Record attendance
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const existingAttendance = await db.attendance.findFirst({
+    where: {
+      staffId: staff.id,
+      createdAt: {
+        gte: today,
+        lt: tomorrow,
+      },
+    },
+  });
+
+  if (existingAttendance) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Attendance already recorded for today');
+  }
+
   const attendance = await db.attendance.create({
     data: {
-      staffId: staff_id,
-      createdAt: timestamp ? new Date(timestamp) : new Date(),
+      staff: {
+        connect: { id: staff.id },
+      },
+    },
+    include: {
+      staff: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              role: true,
+            },
+          },
+          contractor: {
+            select: {
+              id: true,
+              firm_name: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -47,81 +83,109 @@ const recordAttendance = async (managerId, data) => {
 };
 
 /**
- * Retrieves attendance records for a staff member with optional date range filtering and pagination.
- * @param {number} requesterId - ID of the requester.
- * @param {string} requesterRole - Role of the requester.
- * @param {number} staffId - ID of the staff.
- * @param {Object} filters - Filters including start_date and end_date.
- * @param {Object} pagination - Pagination options.
- * @returns {Promise<Object>} - Returns a paginated list of attendance records.
- * @throws {Error} - Throws an error if unauthorized access.
+ * Get attendance records for a staff member
+ * @param {number} staffId - ID of the staff member
+ * @param {Date} [startDate] - Start date for filtering records
+ * @param {Date} [endDate] - End date for filtering records
+ * @returns {Array} Array of attendance records
  */
-const getAttendanceRecord = async (requesterId, requesterRole, staffId, filters, pagination) => {
-  // If requester is Staff, ensure they can only access their own records
-  if (requesterRole === 'Staff' && requesterId !== staffId) {
-    throw new ApiError(httpStatus.FORBIDDEN, 'Cannot access other staff attendance records');
-  }
 
-  // If requester is Contractor, ensure the staff belongs to their contractors
-  if (requesterRole === 'Contractor') {
-    const contractor = await db.contractor.findUnique({
-      where: { userId: requesterId },
-    });
+const getAttendanceRecordsForManagerAndContractors = async (staffId, startDate, endDate) => {
+  const whereClause = {
+    staffId: staffId,
+  };
 
-    if (!contractor) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'Contractor not found');
-    }
-
-    const staff = await db.staff.findUnique({
-      where: { id: staffId },
-    });
-
-    if (!staff || staff.contractorId !== contractor.id) {
-      throw new ApiError(httpStatus.FORBIDDEN, 'Cannot access staff from other contractors');
-    }
-  }
-
-  const { page, limit } = pagination;
-  const { start_date, end_date } = filters;
-
-  const where = { staffId };
-
-  if (start_date && end_date) {
-    where.createdAt = {
-      gte: new Date(start_date),
-      lte: new Date(end_date),
-    };
-  } else if (start_date) {
-    where.createdAt = {
-      gte: new Date(start_date),
-    };
-  } else if (end_date) {
-    where.createdAt = {
-      lte: new Date(end_date),
+  if (startDate && endDate) {
+    whereClause.createdAt = {
+      gte: new Date(startDate),
+      lte: new Date(endDate),
     };
   }
 
   const attendance = await db.attendance.findMany({
-    where,
-    skip: (page - 1) * limit,
-    take: limit,
-    orderBy: { createdAt: 'desc' },
+    where: whereClause,
+    select: {
+      id: true,
+      createdAt: true,
+      updatedAt: true,
+      staff: {
+        select: {
+          id: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              role: true,
+            },
+          },
+          contractor: {
+            select: {
+              id: true,
+              firm_name: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
   });
 
-  const total = await db.attendance.count({ where });
+  return attendance;
+};
 
-  return {
-    data: attendance,
-    total,
-    page,
-    limit,
-    totalPages: Math.ceil(total / limit),
-  };
+const getAttendanceRecords = async (staffId, startDate, endDate) => {
+  if (startDate && endDate) {
+    whereClause.createdAt = {
+      gte: new Date(startDate),
+      lte: new Date(endDate),
+    };
+  }
+
+  const attendance = await db.attendance.findMany({
+    where: {
+      staff: {
+        userId: staffId,
+      },
+    },
+    select: {
+      id: true,
+      createdAt: true,
+      updatedAt: true,
+      staff: {
+        select: {
+          id: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              role: true,
+            },
+          },
+          contractor: {
+            select: {
+              id: true,
+              firm_name: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  return attendance;
 };
 
 const attendanceService = {
   recordAttendance,
-  getAttendanceRecord,
+  getAttendanceRecords,
+  getAttendanceRecordsForManagerAndContractors,
 };
 
 module.exports = attendanceService;

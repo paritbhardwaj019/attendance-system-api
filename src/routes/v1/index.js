@@ -1,6 +1,8 @@
 const express = require('express');
 const authRouter = require('./auth.route');
 const userRouter = require('./user.route');
+const managerRouter = require('./manager.route');
+const attendanceRouter = require('./attendance.route');
 
 const router = express.Router();
 
@@ -12,6 +14,14 @@ const defaultRoutes = [
   {
     path: '/users',
     route: userRouter,
+  },
+  {
+    path: '/manager',
+    route: managerRouter,
+  },
+  {
+    path: '/attendance',
+    route: attendanceRouter,
   },
 ];
 

@@ -1,126 +1,271 @@
 const httpStatus = require('http-status');
 const db = require('../database/prisma');
 const ApiError = require('../utils/ApiError');
-const bcrypt = require('bcryptjs');
+const { hashPassword } = require('../utils/utils');
 
 /**
- * Creates a new user with the specified role.
- * @param {Object} data - User data including role-specific fields.
- * @param {number} createdBy - ID of the admin creating the user.
- * @returns {Promise<Object>} - Returns the created user.
- * @throws {Error} - Throws an error if user type is invalid or creation fails.
+ * Handler to create a new user.
+ * @param {Object} userData - Data for the new user.
+ * @returns {Object} Created user without password.
  */
-
-const createUser = async (data, loggedInUser) => {
-  const { name, username, password, user_type, mobile_number, firm_name, manager_id, contractor_id, fingerprint_data } =
-    data;
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  const role = await db.role.findUnique({
-    where: { name: user_type },
+const createUserHandler = async (userData) => {
+  const existingUser = await db.user.findUnique({
+    where: { username: userData.username },
   });
 
-  if (!role) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user type');
+  if (existingUser) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Username already taken');
   }
 
-  let roleSpecificData = {};
-  switch (user_type) {
-    case 'Admin':
-      roleSpecificData = { admin: {} };
-      break;
-    case 'Manager':
-      roleSpecificData = { manager: {} };
-      break;
-    case 'Contractor':
-      roleSpecificData = {
+  return await db.$transaction(async (prisma) => {
+    const user = await prisma.user.create({
+      data: {
+        name: userData.name,
+        username: userData.username,
+        password: await hashPassword(userData.password),
+        mobile_number: userData.mobile_number,
+        role: {
+          connect: { name: userData.user_type },
+        },
+      },
+      include: {
+        role: true,
+      },
+    });
+
+    switch (userData.user_type) {
+      case 'Admin':
+        await prisma.admin.create({
+          data: {
+            user: { connect: { id: user.id } },
+          },
+        });
+        break;
+
+      case 'Manager':
+        await prisma.manager.create({
+          data: {
+            user: { connect: { id: user.id } },
+          },
+        });
+        break;
+
+      case 'Contractor':
+        await prisma.contractor.create({
+          data: {
+            user: { connect: { id: user.id } },
+            firm_name: userData.firm_name,
+            manager: userData.manager_id
+              ? {
+                  connect: { id: userData.manager_id },
+                }
+              : undefined,
+          },
+        });
+        break;
+
+      case 'Staff':
+        if (!userData.contractor_id || !userData.fingerprint_data) {
+          throw new ApiError(httpStatus.BAD_REQUEST, 'Contractor ID and fingerprint data required for Staff');
+        }
+        await prisma.staff.create({
+          data: {
+            user: { connect: { id: user.id } },
+            contractor: { connect: { id: userData.contractor_id } },
+            fingerprint_data: userData.fingerprint_data,
+          },
+        });
+        break;
+
+      default:
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user type');
+    }
+
+    const createdUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      include: {
+        role: true,
+        admin: true,
+        manager: true,
         contractor: {
-          create: {
-            firm_name: firm_name || null,
-            managerId: manager_id || null,
+          include: {
+            manager: true,
+            staff: true,
           },
         },
-      };
-      break;
-    case 'Staff':
-      roleSpecificData = {
         staff: {
-          create: {
-            contractorId: contractor_id,
-            fingerprint_data,
+          include: {
+            contractor: true,
+            attendance: true,
           },
         },
-      };
-      break;
-    default:
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user type');
-  }
+      },
+    });
 
-  const newUser = await db.user.create({
-    data: {
-      name,
-      username,
-      password: hashedPassword,
-      mobile_number: mobile_number || null,
-      roleId: role.id,
-      ...roleSpecificData,
+    if (!createdUser) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'User not found after creation');
+    }
+
+    delete createdUser.password;
+
+    return createdUser;
+  });
+};
+/**
+ * Handler to fetch multiple users with filters, sorting, and pagination.
+ * @param {Object} filters - Filters for fetching users.
+ * @param {string} [filters.user_type] - Role name to filter users (e.g., 'Admin', 'Manager').
+ * @param {string} [filters.search] - Search term to search across name, username, and mobile_number.
+ * @param {string} [filters.sortBy] - Field to sort by (e.g., 'name', 'username', 'createdAt').
+ * @param {string} [filters.order] - Order of sorting ('asc' or 'desc').
+ * @param {number} [filters.page=1] - Page number for pagination.
+ * @param {number} [filters.limit=10] - Number of users per page.
+ * @returns {Array} List of users matching the filters.
+ */
+const fetchUsersHandler = async (filters = {}) => {
+  let { user_type, search, sortBy = 'createdAt', order = 'desc', page = 1, limit = 10 } = filters;
+
+  page = parseInt(page, 10);
+  limit = parseInt(limit, 10);
+
+  const sortableFields = ['name', 'username', 'createdAt', 'updatedAt'];
+  const sortField = sortableFields.includes(sortBy) ? sortBy : 'createdAt';
+
+  const sortOrder = order.toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+  const skip = (page - 1) * limit;
+  const take = limit;
+
+  const whereClause = {
+    role: user_type ? { name: user_type } : undefined,
+    OR: search
+      ? [{ name: { contains: search } }, { username: { contains: search } }, { mobile_number: { contains: search } }]
+      : undefined,
+  };
+
+  const users = await db.user.findMany({
+    where: whereClause,
+    select: {
+      id: true,
+      name: true,
+      username: true,
+      mobile_number: true,
+      roleId: true,
+      role: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      admin: {
+        select: {
+          id: true,
+          user: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+      manager: {
+        select: {
+          id: true,
+          user: {
+            select: {
+              name: true,
+              username: true,
+            },
+          },
+          userId: true,
+          contractors: true,
+          _count: true,
+        },
+      },
+      contractor: {
+        select: {
+          id: true,
+          userId: true,
+          firm_name: true,
+          managerId: true,
+          manager: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  name: true,
+                  username: true,
+                },
+              },
+              userId: true,
+              contractors: true,
+              _count: true,
+            },
+          },
+        },
+      },
+      staff: {
+        select: {
+          id: true,
+          userId: true,
+          contractorId: true,
+          fingerprint_data: true,
+          attendance: {
+            select: {
+              id: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+        },
+      },
+      createdAt: true,
+      updatedAt: true,
     },
+    orderBy: {
+      [sortField]: sortOrder,
+    },
+    skip: skip,
+    take: take,
+  });
+
+  const totalUsers = await db.user.count({
+    where: whereClause,
+  });
+
+  return {
+    data: users,
+    pagination: {
+      total: totalUsers,
+      page: page,
+      limit: limit,
+      totalPages: Math.ceil(totalUsers / limit),
+    },
+  };
+};
+
+/**
+ * Handler to fetch a single user by ID.
+ * @param {number} userId - ID of the user to fetch.
+ * @returns {Object} User object without password.
+ */
+const fetchUserByIdHandler = async (userId) => {
+  const user = await db.user.findUnique({
+    where: { id: userId },
     include: {
       role: true,
       admin: true,
       manager: true,
-      contractor: true,
-      staff: true,
-    },
-  });
-
-  return newUser;
-};
-
-/**
- * Deletes a user by ID.
- * @param {number} id - ID of the user to delete.
- * @returns {Promise<Object>} - Returns a success message.
- * @throws {Error} - Throws an error if user is not found.
- */
-
-const deleteUser = async (id) => {
-  const user = await db.user.findUnique({
-    where: { id: id },
-  });
-
-  if (!user) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
-  }
-
-  await db.user.delete({
-    where: { id: id },
-  });
-
-  return { message: 'User deleted successfully' };
-};
-
-/**
- * Retrieves user details by ID.
- * @param {number} id - ID of the user to retrieve.
- * @returns {Promise<Object>} - Returns the user details.
- * @throws {Error} - Throws an error if user is not found.
- */
-const getUserDetails = async (id) => {
-  const user = await db.user.findUnique({
-    where: { id: id },
-    include: {
-      role: true,
-      admin: true,
-      manager: {
-        include: { contractors: true },
-      },
       contractor: {
-        include: { manager: true, staff: true },
+        include: {
+          manager: true,
+          staff: true,
+        },
       },
       staff: {
-        include: { contractor: true },
+        include: {
+          contractor: true,
+          attendance: true,
+        },
       },
     },
   });
@@ -129,56 +274,79 @@ const getUserDetails = async (id) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
   }
 
+  delete user.password;
   return user;
 };
 
 /**
- * Lists users with optional filtering and pagination.
- * @param {Object} filters - Filters for user type and search term.
- * @param {Object} pagination - Pagination options including page and limit.
- * @returns {Promise<Object>} - Returns a paginated list of users.
+ * Handler to delete a user by ID.
+ * @param {number} id - ID of the user to delete.
+ * @returns {boolean} True if deletion was successful.
  */
 
-const listUsers = async (filters, pagination) => {
-  const { skip, take, page } = pagination;
-  const { user_type, search } = filters;
+const deleteUserHandler = async (id) => {
+  const user = await fetchUserByIdHandler(id);
 
-  const where = {};
-
-  if (user_type) {
-    const role = await db.role.findUnique({ where: { name: user_type } });
-    if (role) {
-      where.roleId = role.id;
+  await db.$transaction(async (prisma) => {
+    switch (user.role.name) {
+      case 'Admin':
+        await prisma.admin.delete({
+          where: {
+            user: {
+              id,
+            },
+          },
+        });
+        break;
+      case 'Manager':
+        await prisma.manager.delete({
+          where: {
+            user: {
+              id,
+            },
+          },
+        });
+        break;
+      case 'Contractor':
+        await prisma.contractor.delete({
+          where: {
+            user: {
+              id,
+            },
+          },
+        });
+        break;
+      case 'Staff':
+        await prisma.attendance.deleteMany({
+          where: {
+            staff: {
+              id: user.staff.id,
+            },
+          },
+        });
+        await prisma.staff.delete({
+          where: {
+            user: {
+              id,
+            },
+          },
+        });
+        break;
+      default:
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user role');
     }
-  }
 
-  if (search) {
-    where.name = { contains: search, mode: 'insensitive' };
-  }
-
-  const users = await db.user.findMany({
-    where,
-    skip,
-    take,
-    include: { role: true },
+    await prisma.user.delete({ where: { id } });
   });
 
-  const total = await db.user.count({ where });
-
-  return {
-    data: users,
-    total,
-    page,
-    limit: take,
-    totalPages: Math.ceil(total / take),
-  };
+  return true;
 };
 
 const userService = {
-  createUser,
-  deleteUser,
-  getUserDetails,
-  listUsers,
+  createUserHandler,
+  fetchUsersHandler,
+  fetchUserByIdHandler,
+  deleteUserHandler,
 };
 
 module.exports = userService;

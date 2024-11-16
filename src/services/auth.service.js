@@ -1,7 +1,7 @@
 const httpStatus = require('http-status');
 const db = require('../database/prisma');
 const ApiError = require('../utils/ApiError');
-const { createToken, comparePassword, verifyToken } = require('../utils/utils');
+const { createToken, comparePassword } = require('../utils/utils');
 const config = require('../config/config');
 
 /**
@@ -11,17 +11,7 @@ const config = require('../config/config');
  */
 
 function generateAccessToken(payload) {
-  return createToken(payload, config.jwt.secret, '15m');
-}
-
-/**
- * Generates a JWT refresh token.
- * @param {Object} payload - The payload to encode in the token (e.g., userId).
- * @returns {string} - Returns the generated refresh token.
- */
-
-function generateRefreshToken(payload) {
-  return createToken(payload, config.jwt.refreshTokenSecret, '7d');
+  return createToken(payload, config.jwt.secret, '24h');
 }
 
 /**
@@ -61,62 +51,13 @@ const loginWithUserNameHandler = async (data) => {
     role: user.role.name,
   });
 
-  const refreshToken = generateRefreshToken({
-    id: user.id,
-  });
-
-  await db.user.update({
-    where: {
-      id: user.id,
-    },
-    data: {
-      refreshToken,
-    },
-  });
-
   delete user.password;
 
-  return { user, accessToken, refreshToken };
-};
-
-/**
- * Verifies and refreshes the access token using a valid refresh token.
- * @param {string} refreshToken - The refresh token to verify and use for refreshing.
- * @returns {Promise<Object>} - Returns a new access token.
- * @throws {Error} - Throws an error if the refresh token is invalid or expired.
- */
-
-const refreshAccessTokenHandler = async (refreshToken) => {
-  const decodedToken = verifyToken(refreshToken, config.jwt.refreshTokenSecret);
-
-  const user = await db.user.findUnique({ where: { id: decodedToken.id }, include: { role: true } });
-
-  if (!user || user.refreshToken !== refreshToken) throw new ApiError('Invalid refresh token');
-
-  const newAccessToken = generateAccessToken({
-    id: user.id,
-    role: user.role.name,
-  });
-
-  const newRefreshToken = generateRefreshToken({
-    id: user.id,
-  });
-
-  await db.user.update({
-    where: {
-      id: user.id,
-    },
-    data: {
-      refreshToken,
-    },
-  });
-
-  return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+  return { user, accessToken };
 };
 
 const authService = {
   loginWithUserNameHandler,
-  refreshAccessTokenHandler,
 };
 
 module.exports = authService;
