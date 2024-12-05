@@ -8,79 +8,161 @@ datasource db {
 }
 
 model Role {
-  id    Int     @id @default(autoincrement())
-  name  String  @unique
+  id    Int    @id @default(autoincrement())
+  name  String @unique
   users User[]
 
-    createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model User {
-  id             Int        @id @default(autoincrement())
-  name           String
-  username       String     @unique
-  password       String
-  mobile_number  String?
-  roleId         Int
-  role           Role       @relation(fields: [roleId], references: [id])
+  id            Int     @id @default(autoincrement())
+  name          String
+  username      String  @unique
+  password      String
+  mobile_number String?
+  roleId        Int
+  role          Role    @relation(fields: [roleId], references: [id])
 
-  admin          Admin?
-  manager        Manager?
-  contractor     Contractor?
-  staff          Staff?
+  createdVisitors  Visitor[] @relation("VisitorCreated")
+  approvedVisitors Visitor[] @relation("VisitorApproved")
 
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  admin      Admin?
+  manager    Manager?
+  contractor Contractor?
+  labour     Labour?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Admin {
-  id     Int   @id @default(autoincrement())
-  user   User  @relation(fields: [userId], references: [id])
-  userId Int   @unique
+  id     Int  @id @default(autoincrement())
+  user   User @relation(fields: [userId], references: [id])
+  userId Int  @unique
 
-    createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Manager {
-  id          Int           @id @default(autoincrement())
-  user        User          @relation(fields: [userId], references: [id])
-  userId      Int           @unique
+  id          Int          @id @default(autoincrement())
+  user        User         @relation(fields: [userId], references: [id])
+  userId      Int          @unique
   contractors Contractor[]
 }
 
 model Contractor {
-  id          Int           @id @default(autoincrement())
-  user        User          @relation(fields: [userId], references: [id])
-  userId      Int           @unique
-  firm_name   String?
-  manager     Manager?      @relation(fields: [managerId], references: [id])
-  managerId   Int?
-  staff       Staff[]
+  id         Int              @id @default(autoincrement())
+  user       User             @relation(fields: [userId], references: [id])
+  userId     Int              @unique
+  firm_name  String?
+  manager    Manager?         @relation(fields: [managerId], references: [id])
+  managerId  Int?
+  labour     Labour[]
 
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt 
+  aadhar_number String           @unique
+
+  photos     ContractorPhoto[] 
+  pdfs       ContractorPDF[]  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model Staff {
-  id               Int           @id @default(autoincrement())
-  user             User          @relation(fields: [userId], references: [id])
-  userId           Int           @unique
-  contractor       Contractor    @relation(fields: [contractorId], references: [id])
+model ContractorPhoto {
+  id           Int         @id @default(autoincrement())
+  url          String
+  contractor    Contractor @relation(fields: [contractorId], references: [id])
+  contractorId Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ContractorPDF {
+  id           Int         @id @default(autoincrement())
+  url          String
+  contractor    Contractor @relation(fields: [contractorId], references: [id])
+  contractorId Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LabourPhoto {
+  id         Int      @id @default(autoincrement())
+  url        String
+  labour     Labour   @relation(fields: [labourId], references: [id])
+  labourId   Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LabourPDF {
+  id         Int      @id @default(autoincrement())
+  url        String
+  labour     Labour   @relation(fields: [labourId], references: [id])
+  labourId   Int
+
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Labour {
+  id               Int          @id @default(autoincrement())
+  user             User         @relation(fields: [userId], references: [id])
+  userId           Int          @unique
+  contractor       Contractor   @relation(fields: [contractorId], references: [id])
   contractorId     Int
   fingerprint_data String
   attendance       Attendance[]
 
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt 
+  aadhar_number String           @unique
+
+  photos     LabourPhoto[] 
+  pdfs       LabourPDF[]  
+
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Attendance {
-  id               Int      @id @default(autoincrement())
-  staff            Staff    @relation(fields: [staffId], references: [id])
-  staffId          Int
-  
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime          @updatedAt
+  id       Int    @id @default(autoincrement())
+  labour   Labour @relation(fields: [labourId], references: [id])
+  labourId Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Visitor {
+  id           Int           @id @default(autoincrement())
+  name         String
+  contact      String
+  email        String        @unique
+  visitPurpose String
+  visitDate    DateTime
+  status       VisitorStatus @default(PENDING)
+  ticketId     String        @unique
+  remarks      String?
+
+  createdBy   User? @relation("VisitorCreated", fields: [createdById], references: [id])
+  createdById Int?
+
+  approvedBy   User? @relation("VisitorApproved", fields: [approvedById], references: [id])
+  approvedById Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum VisitorStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

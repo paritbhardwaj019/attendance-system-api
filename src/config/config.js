@@ -10,6 +10,7 @@ const envVarsSchema = Joi.object()
     PORT: Joi.number().default(3000),
     JWT_SECRET: Joi.string().required().description('JWT secret key'),
     REFRESH_TOKEN_SECRET: Joi.string().required().description('Refresh token secret'),
+    FRONTEND_URL: Joi.string().required().description('Frontend URL'),
   })
   .unknown();
 
@@ -26,4 +27,5 @@ module.exports = {
     secret: envVars.JWT_SECRET,
     refreshTokenSecret: envVars.REFRESH_TOKEN_SECRET,
   },
+  frontendUrl: envVars.FRONTEND_URL,
 };

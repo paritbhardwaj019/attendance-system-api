@@ -2,6 +2,7 @@ const httpStatus = require('http-status');
 const db = require('../database/prisma');
 const ApiError = require('../utils/ApiError');
 const { hashPassword } = require('../utils/utils');
+const { ROLES } = require('../config/roles');
 
 /**
  * Handler to create a new user.
@@ -34,7 +35,7 @@ const createUserHandler = async (userData) => {
     });
 
     switch (userData.user_type) {
-      case 'Admin':
+      case ROLES.ADMIN:
         await prisma.admin.create({
           data: {
             user: { connect: { id: user.id } },
@@ -42,7 +43,7 @@ const createUserHandler = async (userData) => {
         });
         break;
 
-      case 'Manager':
+      case ROLES.MANAGER:
         await prisma.manager.create({
           data: {
             user: { connect: { id: user.id } },
@@ -50,7 +51,7 @@ const createUserHandler = async (userData) => {
         });
         break;
 
-      case 'Contractor':
+      case ROLES.CONTRACTOR:
         await prisma.contractor.create({
           data: {
             user: { connect: { id: user.id } },
@@ -64,11 +65,11 @@ const createUserHandler = async (userData) => {
         });
         break;
 
-      case 'Staff':
+      case ROLES.LABOUR:
         if (!userData.contractor_id || !userData.fingerprint_data) {
-          throw new ApiError(httpStatus.BAD_REQUEST, 'Contractor ID and fingerprint data required for Staff');
+          throw new ApiError(httpStatus.BAD_REQUEST, 'Contractor ID and fingerprint data required for Labour');
         }
-        await prisma.staff.create({
+        await prisma.labour.create({
           data: {
             user: { connect: { id: user.id } },
             contractor: { connect: { id: userData.contractor_id } },
@@ -90,10 +91,10 @@ const createUserHandler = async (userData) => {
         contractor: {
           include: {
             manager: true,
-            staff: true,
+            labour: true,
           },
         },
-        staff: {
+        labour: {
           include: {
             contractor: true,
             attendance: true,
@@ -203,7 +204,7 @@ const fetchUsersHandler = async (filters = {}) => {
           },
         },
       },
-      staff: {
+      labour: {
         select: {
           id: true,
           userId: true,
@@ -258,10 +259,10 @@ const fetchUserByIdHandler = async (userId) => {
       contractor: {
         include: {
           manager: true,
-          staff: true,
+          labour: true,
         },
       },
-      staff: {
+      labour: {
         include: {
           contractor: true,
           attendance: true,
@@ -289,7 +290,7 @@ const deleteUserHandler = async (id) => {
 
   await db.$transaction(async (prisma) => {
     switch (user.role.name) {
-      case 'Admin':
+      case ROLES.ADMIN:
         await prisma.admin.delete({
           where: {
             user: {
@@ -298,7 +299,7 @@ const deleteUserHandler = async (id) => {
           },
         });
         break;
-      case 'Manager':
+      case ROLES.MANAGER:
         await prisma.manager.delete({
           where: {
             user: {
@@ -307,7 +308,7 @@ const deleteUserHandler = async (id) => {
           },
         });
         break;
-      case 'Contractor':
+      case ROLES.CONTRACTOR:
         await prisma.contractor.delete({
           where: {
             user: {
@@ -316,15 +317,15 @@ const deleteUserHandler = async (id) => {
           },
         });
         break;
-      case 'Staff':
+      case ROLES.LABOUR:
         await prisma.attendance.deleteMany({
           where: {
-            staff: {
-              id: user.staff.id,
+            labour: {
+              id: user.labour.id,
             },
           },
         });
-        await prisma.staff.delete({
+        await prisma.labour.delete({
           where: {
             user: {
               id,

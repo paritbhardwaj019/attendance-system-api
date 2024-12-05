@@ -7,7 +7,6 @@ const ApiError = require('../utils/ApiError');
  */
 
 const checkRole = (roles) => (req, res, next) => {
-  console.log('REQ_USER', req.user);
   if (!req.user || !roles.includes(req.user.role)) {
     return next(new ApiError(httpStatus.FORBIDDEN, 'Access denied'));
   }

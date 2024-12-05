@@ -3,31 +3,98 @@ const catchAsync = require('../utils/catchAsync');
 const ApiResponse = require('../utils/ApiResponse');
 const managerService = require('../services/manager.service');
 
+/**
+ * Controller to add a new contractor with files.
+ */
 const addContractor = catchAsync(async (req, res) => {
-  const contractor = await managerService.addContractorHandler(parseInt(req.user.id, 10), req.body);
+  const managerUserId = parseInt(req.user.id, 10);
+
+  const contractorData = {
+    name: req.body.name,
+    username: req.body.username,
+    password: req.body.password,
+    mobile_number: req.body.mobile_number,
+    firm_name: req.body.firm_name,
+    aadhar_number: req.body.aadhar_number,
+  };
+
+  const files = {
+    photos: req.files['photos'] || [],
+    pdfs: req.files['pdfs'] || [],
+  };
+
+  const contractor = await managerService.addContractorHandler(managerUserId, contractorData, files);
+
   res.status(httpStatus.CREATED).json(ApiResponse.success(httpStatus.CREATED, 'Contractor added successfully', contractor));
 });
 
+/**
+ * Controller to fetch contractors with optional filters, sorting, and pagination.
+ */
 const getContractors = catchAsync(async (req, res) => {
-  const contractors = await managerService.fetchContractorsHandler(req.query, req.user);
+  const filters = {
+    search: req.query.search,
+    sortBy: req.query.sortBy,
+    order: req.query.order,
+    page: req.query.page,
+    limit: req.query.limit,
+  };
+
+  const contractors = await managerService.fetchContractorsHandler(filters, req.user);
+
   res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Contractors retrieved successfully', contractors));
 });
 
-const addStaff = catchAsync(async (req, res) => {
-  const staff = await managerService.addStaff(req.user, req.body);
-  res.status(httpStatus.CREATED).json(ApiResponse.success(httpStatus.CREATED, 'Staff added successfully', staff));
+/**
+ * Controller to add a new labour (staff) with files.
+ */
+const addLabour = catchAsync(async (req, res) => {
+  const contractorId = parseInt(req.body.contractorId, 10);
+
+  const labourData = {
+    name: req.body.name,
+    username: req.body.username,
+    password: req.body.password,
+    mobile_number: req.body.mobile_number,
+    fingerprint_data: req.body.fingerprint_data,
+    aadhar_number: req.body.aadhar_number,
+  };
+
+  const files = {
+    photos: req.files['photos'] || [],
+    pdfs: req.files['pdfs'] || [],
+  };
+
+  const labour = await managerService.addLabourHandler(contractorId, labourData, files);
+
+  res.status(httpStatus.CREATED).json(ApiResponse.success(httpStatus.CREATED, 'Labour added successfully', labour));
 });
 
-const getContractorStaff = catchAsync(async (req, res) => {
-  const staff = await managerService.getContractorStaff(req.user, req.params.id, req.query);
-  res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Staff list retrieved successfully', staff));
+/**
+ * Controller to fetch labour members under a specific contractor with optional filters, sorting, and pagination.
+ */
+const getContractorLabour = catchAsync(async (req, res) => {
+  const contractorId = parseInt(req.params.id, 10);
+
+  const filters = {
+    search: req.query.search,
+    sortBy: req.query.sortBy,
+    order: req.query.order,
+    page: req.query.page,
+    limit: req.query.limit,
+  };
+
+  // Pass the user, contractorId, and filters to the service handler
+  const labour = await managerService.getContractorLabour(req.user, contractorId, filters);
+
+  res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Labour list retrieved successfully', labour));
 });
 
 const managerController = {
   addContractor,
   getContractors,
-  addStaff,
-  getContractorStaff,
+  addLabour,
+  getContractorLabour,
 };
 
 module.exports = managerController;

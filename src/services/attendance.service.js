@@ -3,15 +3,15 @@ const db = require('../database/prisma');
 const ApiError = require('../utils/ApiError');
 
 /**
- * Record attendance for a staff member
- * @param {number} staffId - ID of the staff member (Staff.id)
+ * Record attendance for a labour member
+ * @param {number} labourId - ID of the labour member (Staff.id)
  * @param {string} fingerprint_data - Fingerprint data for verification
  * @returns {Object} Created attendance record
  */
 
-const recordAttendance = async (staffId, fingerprint_data) => {
-  const staff = await db.staff.findUnique({
-    where: { userId: staffId },
+const recordAttendance = async (labourId, fingerprint_data) => {
+  const labour = await db.labour.findUnique({
+    where: { userId: labourId },
     include: {
       user: {
         select: {
@@ -24,11 +24,11 @@ const recordAttendance = async (staffId, fingerprint_data) => {
     },
   });
 
-  if (!staff) {
+  if (!labour) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Staff not found');
   }
 
-  if (staff.fingerprint_data !== fingerprint_data) {
+  if (labour.fingerprint_data !== fingerprint_data) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid fingerprint data');
   }
 
@@ -39,7 +39,7 @@ const recordAttendance = async (staffId, fingerprint_data) => {
 
   const existingAttendance = await db.attendance.findFirst({
     where: {
-      staffId: staff.id,
+      labourId: labour.id,
       createdAt: {
         gte: today,
         lt: tomorrow,
@@ -53,12 +53,12 @@ const recordAttendance = async (staffId, fingerprint_data) => {
 
   const attendance = await db.attendance.create({
     data: {
-      staff: {
-        connect: { id: staff.id },
+      labour: {
+        connect: { id: labour.id },
       },
     },
     include: {
-      staff: {
+      labour: {
         include: {
           user: {
             select: {
@@ -83,16 +83,16 @@ const recordAttendance = async (staffId, fingerprint_data) => {
 };
 
 /**
- * Get attendance records for a staff member
- * @param {number} staffId - ID of the staff member
+ * Get attendance records for a labour member
+ * @param {number} labourId - ID of the labour member
  * @param {Date} [startDate] - Start date for filtering records
  * @param {Date} [endDate] - End date for filtering records
  * @returns {Array} Array of attendance records
  */
 
-const getAttendanceRecordsForManagerAndContractors = async (staffId, startDate, endDate) => {
+const getAttendanceRecordsForManagerAndContractors = async (labourId, startDate, endDate) => {
   const whereClause = {
-    staffId: staffId,
+    labourId: labourId,
   };
 
   if (startDate && endDate) {
@@ -108,7 +108,7 @@ const getAttendanceRecordsForManagerAndContractors = async (staffId, startDate, 
       id: true,
       createdAt: true,
       updatedAt: true,
-      staff: {
+      labour: {
         select: {
           id: true,
           user: {
@@ -136,7 +136,7 @@ const getAttendanceRecordsForManagerAndContractors = async (staffId, startDate, 
   return attendance;
 };
 
-const getAttendanceRecords = async (staffId, startDate, endDate) => {
+const getAttendanceRecords = async (labourId, startDate, endDate) => {
   if (startDate && endDate) {
     whereClause.createdAt = {
       gte: new Date(startDate),
@@ -146,15 +146,15 @@ const getAttendanceRecords = async (staffId, startDate, endDate) => {
 
   const attendance = await db.attendance.findMany({
     where: {
-      staff: {
-        userId: staffId,
+      labour: {
+        userId: labourId,
       },
     },
     select: {
       id: true,
       createdAt: true,
       updatedAt: true,
-      staff: {
+      labour: {
         select: {
           id: true,
           user: {

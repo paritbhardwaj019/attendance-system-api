@@ -1,10 +1,11 @@
 const { PrismaClient } = require('@prisma/client');
 const logger = require('../config/logger');
+const { ROLES } = require('../config/roles');
 
 const prisma = new PrismaClient();
 
 async function seedRoles() {
-  const roles = ['Admin', 'Manager', 'Contractor', 'Staff'];
+  const roles = [ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR, ROLES.LABOUR];
 
   for (const roleName of roles) {
     const role = await prisma.role.upsert({

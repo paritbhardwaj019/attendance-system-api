@@ -2,6 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const prompt = require('prompt');
 const { hashPassword } = require('../utils/utils');
 const logger = require('../config/logger');
+const { ROLES } = require('../config/roles');
 
 const prisma = new PrismaClient();
 
@@ -47,7 +48,7 @@ async function seedAdmin() {
   const hashedPassword = await hashPassword(password);
 
   const adminRole = await prisma.role.findUnique({
-    where: { name: 'Admin' },
+    where: { name: ROLES.ADMIN },
   });
 
   if (!adminRole) {

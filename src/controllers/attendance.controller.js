@@ -22,18 +22,18 @@ const getAttendance = catchAsync(async (req, res) => {
     .json(ApiResponse.success(httpStatus.OK, 'Attendance records retrieved successfully', attendance));
 });
 
-const getStaffAttendance = catchAsync(async (req, res) => {
+const getLabourAttendance = catchAsync(async (req, res) => {
   const { startDate, endDate } = req.query;
   const attendance = await attendanceService.getAttendanceRecords(req.user.id, startDate, endDate);
   res
     .status(httpStatus.OK)
-    .json(ApiResponse.success(httpStatus.OK, 'Staff attendance records retrieved successfully', attendance));
+    .json(ApiResponse.success(httpStatus.OK, 'Labour attendance records retrieved successfully', attendance));
 });
 
 const attendanceController = {
   recordAttendance,
   getAttendance,
-  getStaffAttendance,
+  getLabourAttendance,
 };
 
 module.exports = attendanceController;
