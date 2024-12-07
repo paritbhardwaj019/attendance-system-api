@@ -22,7 +22,7 @@ managerRouter
     ]),
     managerController.addContractor
   )
-  .get(checkJWT, checkRole([ROLES.MANAGER]), managerController.getContractors);
+  .get(checkJWT, checkRole([ROLES.MANAGER, ROLES.ADMIN]), managerController.getContractors);
 
 managerRouter.route('/staff').post(
   checkJWT,

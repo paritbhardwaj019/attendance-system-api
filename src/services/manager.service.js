@@ -167,23 +167,40 @@ const addContractorHandler = async (managerUserId, contractorData, files) => {
  */
 
 const fetchContractorsHandler = async (filters = {}, loggedInUser) => {
-  let { search, sortBy = 'createdAt', order = 'desc', page = 1, limit = 10 } = filters;
+  let { search, sortBy = 'createdAt', order = 'desc', page = 1, limit = 10, managerId } = filters;
 
   page = parseInt(page, 10);
   limit = parseInt(limit, 10);
 
   const sortableFields = ['name', 'username', 'createdAt', 'updatedAt'];
   const sortField = sortableFields.includes(sortBy) ? sortBy : 'createdAt';
-
   const sortOrder = order.toLowerCase() === 'asc' ? 'asc' : 'desc';
 
   const skip = (page - 1) * limit;
   const take = limit;
 
+  let managerUserId;
+  if (loggedInUser.role.name === ROLES.ADMIN) {
+    if (!managerId) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Manager ID is required for admin');
+    }
+    const manager = await db.manager.findFirst({
+      where: { id: managerId },
+      select: { user: { select: { id: true } } },
+    });
+
+    if (!manager) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Manager not found');
+    }
+    managerUserId = manager.user.id;
+  } else {
+    managerUserId = loggedInUser.id;
+  }
+
   const whereClause = {
     manager: {
       user: {
-        id: loggedInUser.id,
+        id: managerUserId,
       },
     },
     OR: search

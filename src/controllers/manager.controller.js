@@ -2,6 +2,7 @@ const httpStatus = require('http-status');
 const catchAsync = require('../utils/catchAsync');
 const ApiResponse = require('../utils/ApiResponse');
 const managerService = require('../services/manager.service');
+const { ROLES } = require('../config/roles');
 
 /**
  * Controller to add a new contractor with files.
@@ -38,7 +39,12 @@ const getContractors = catchAsync(async (req, res) => {
     order: req.query.order,
     page: req.query.page,
     limit: req.query.limit,
+    managerId: req.query.managerId,
   };
+
+  if (req.user.role === ROLES.ADMIN && !filters.managerId) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Manager ID is required for admin');
+  }
 
   const contractors = await managerService.fetchContractorsHandler(filters, req.user);
 
