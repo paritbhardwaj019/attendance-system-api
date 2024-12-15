@@ -33,6 +33,7 @@ const listVisitorRequests = catchAsync(async (req, res) => {
     status,
     startDate,
     endDate,
+    createdById: req.user.id,
   });
 
   res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Visitor requests retrieved', visitors));

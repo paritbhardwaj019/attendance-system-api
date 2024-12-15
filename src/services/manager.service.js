@@ -3,38 +3,85 @@ const db = require('../database/prisma');
 const ApiError = require('../utils/ApiError');
 const { hashPassword } = require('../utils/utils');
 const { ROLES } = require('../config/roles');
-const { uploadFileToS3, uploadMultipleFilesToS3 } = require('./s3.service');
+const { uploadMultipleFilesToS3 } = require('./s3.service');
 
 /**
- * Adds a new contractor with multiple photos and PDFs.
- * @param {Number} managerUserId - The user ID of the manager.
- * @param {Object} contractorData - The contractor's data.
- * @param {Object} files - The uploaded files (photos and PDFs).
- * @returns {Object} - The created contractor object.
- * @throws {ApiError} - Throws ApiError for known error scenarios.
+ * Get base where clause for dynamic access control
+ * @param {Object} loggedInUser - The logged-in user
+ * @param {string} type - Entity type ('contractor' or 'labour')
+ * @returns {Object} Prisma where clause
  */
-const addContractorHandler = async (managerUserId, contractorData, files) => {
-  if (!managerUserId || !contractorData || !contractorData.name || !contractorData.username || !contractorData.password) {
+const getBaseWhereClause = async (loggedInUser, type) => {
+  const whereClause = {};
+
+  switch (loggedInUser.role) {
+    case ROLES.ADMIN:
+      whereClause.createdById = loggedInUser.id;
+      break;
+
+    case ROLES.MANAGER: {
+      const manager = await db.manager.findUnique({
+        where: { userId: loggedInUser.id },
+        select: { id: true },
+      });
+
+      if (type === 'contractor') {
+        whereClause.managerId = manager.id;
+      } else if (type === 'labour') {
+        whereClause.contractor = {
+          managerId: manager.id,
+        };
+      }
+      break;
+    }
+  }
+
+  return whereClause;
+};
+
+/**
+ * Add a new contractor with dynamic access control
+ */
+const addContractorHandler = async (loggedInUser, contractorData, files) => {
+  if (!contractorData || !contractorData.name || !contractorData.username || !contractorData.password) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Missing required fields');
   }
 
-  const manager = await db.manager.findUnique({
-    where: { userId: managerUserId },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          mobile_number: true,
-          role: true,
-        },
-      },
-    },
+  const existingUsername = await db.user.findUnique({
+    where: { username: contractorData.username },
   });
 
-  if (!manager) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Manager not found');
+  if (existingUsername) {
+    throw new ApiError(httpStatus.CONFLICT, 'Username already exists');
+  }
+
+  if (contractorData.aadhar_number) {
+    const existingAadhar = await db.contractor.findUnique({
+      where: { aadhar_number: contractorData.aadhar_number },
+    });
+
+    if (existingAadhar) {
+      throw new ApiError(httpStatus.CONFLICT, 'Aadhar number already exists');
+    }
+  }
+
+  let managerId = null;
+  if (loggedInUser.role.name === ROLES.MANAGER) {
+    const manager = await db.manager.findUnique({
+      where: { userId: loggedInUser.id },
+    });
+    if (!manager) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Manager not found');
+    }
+    managerId = manager.id;
+  } else if (contractorData.managerId) {
+    const manager = await db.manager.findUnique({
+      where: { id: contractorData.managerId },
+    });
+    if (!manager) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Specified manager not found');
+    }
+    managerId = manager.id;
   }
 
   const [photoUrls, pdfUrls] = await Promise.all([
@@ -47,11 +94,10 @@ const addContractorHandler = async (managerUserId, contractorData, files) => {
       data: {
         name: contractorData.name,
         username: contractorData.username,
+        email: contractorData.email,
         password: await hashPassword(contractorData.password),
         mobile_number: contractorData.mobile_number,
-        role: {
-          connect: { name: ROLES.CONTRACTOR },
-        },
+        role: { connect: { name: ROLES.CONTRACTOR } },
       },
       select: {
         id: true,
@@ -66,8 +112,10 @@ const addContractorHandler = async (managerUserId, contractorData, files) => {
       data: {
         user: { connect: { id: user.id } },
         firm_name: contractorData.firm_name,
-        manager: { connect: { id: manager.id } },
         aadhar_number: contractorData.aadhar_number,
+        ...(managerId && { manager: { connect: { id: managerId } } }),
+        createdBy: { connect: { id: loggedInUser.id } },
+        updatedBy: { connect: { id: loggedInUser.id } },
       },
       include: {
         user: {
@@ -89,33 +137,85 @@ const addContractorHandler = async (managerUserId, contractorData, files) => {
                 username: true,
               },
             },
+          },
+        },
+        createdBy: {
+          select: {
+            name: true,
+            username: true,
           },
         },
       },
     });
 
     if (photoUrls.length > 0) {
-      const photoRecords = photoUrls.map((url) => ({
-        url,
-        contractorId: contractorRecord.id,
-      }));
       await tx.contractorPhoto.createMany({
-        data: photoRecords,
+        data: photoUrls.map((url) => ({
+          url,
+          contractorId: contractorRecord.id,
+        })),
       });
     }
 
     if (pdfUrls.length > 0) {
-      const pdfRecords = pdfUrls.map((url) => ({
-        url,
-        contractorId: contractorRecord.id,
-      }));
       await tx.contractorPDF.createMany({
-        data: pdfRecords,
+        data: pdfUrls.map((url) => ({
+          url,
+          contractorId: contractorRecord.id,
+        })),
       });
     }
 
-    const completeContractor = await tx.contractor.findUnique({
-      where: { id: contractorRecord.id },
+    return contractorRecord;
+  });
+
+  const { password, ...contractorWithoutPassword } = contractor;
+  return contractorWithoutPassword;
+};
+/**
+ * Fetch contractors with dynamic access control
+ */
+const fetchContractorsHandler = async (filters = {}, loggedInUser) => {
+  const { search, sortBy = 'createdAt', order = 'desc', page = 1, limit = 10 } = filters;
+
+  let whereClause = {};
+
+  if (loggedInUser.role === ROLES.ADMIN) {
+    whereClause = {
+      createdById: loggedInUser.id,
+    };
+  } else if (loggedInUser.role === ROLES.MANAGER) {
+    whereClause = {
+      OR: [
+        { createdById: loggedInUser.id },
+        {
+          manager: {
+            userId: loggedInUser.id,
+          },
+        },
+      ],
+    };
+  }
+
+  if (search) {
+    whereClause = {
+      AND: [
+        whereClause,
+        {
+          OR: [
+            { user: { name: { contains: search } } },
+            { user: { username: { contains: search } } },
+            { user: { mobile_number: { contains: search } } },
+          ],
+        },
+      ],
+    };
+  }
+
+  // Execute query with pagination
+  const [contractors, total] = await Promise.all([
+    db.contractor.findMany({
+      where: whereClause,
       include: {
         user: {
           select: {
@@ -138,176 +238,79 @@ const addContractorHandler = async (managerUserId, contractorData, files) => {
             },
           },
         },
-        photos: true,
-        pdfs: true,
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
       },
-    });
+      orderBy: { [sortBy]: order },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    db.contractor.count({ where: whereClause }),
+  ]);
 
-    return completeContractor;
-  });
-
-  const { password, ...safeUser } = contractor.user;
-  delete contractor.managerId;
-
-  return {
+  const enhancedContractors = contractors.map((contractor) => ({
     ...contractor,
-    user: safeUser,
-  };
-};
-
-/**
- * Handler to fetch multiple contractors with filters, sorting, and pagination.
- * @param {Object} filters - Filters for fetching contractors.
- * @param {string} [filters.search] - Search term to search across name, username, and mobile_number.
- * @param {string} [filters.sortBy] - Field to sort by (e.g., 'name', 'username', 'createdAt').
- * @param {string} [filters.order] - Order of sorting ('asc' or 'desc').
- * @param {number} [filters.page=1] - Page number for pagination.
- * @param {number} [filters.limit=10] - Number of contractors per page.
- * @returns {Object} Object containing contractor data and pagination info.
- */
-
-const fetchContractorsHandler = async (filters = {}, loggedInUser) => {
-  let { search, sortBy = 'createdAt', order = 'desc', page = 1, limit = 10, managerId } = filters;
-
-  page = parseInt(page, 10);
-  limit = parseInt(limit, 10);
-
-  const sortableFields = ['name', 'username', 'createdAt', 'updatedAt'];
-  const sortField = sortableFields.includes(sortBy) ? sortBy : 'createdAt';
-  const sortOrder = order.toLowerCase() === 'asc' ? 'asc' : 'desc';
-
-  const skip = (page - 1) * limit;
-  const take = limit;
-
-  let managerUserId;
-  if (loggedInUser.role.name === ROLES.ADMIN) {
-    if (!managerId) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Manager ID is required for admin');
-    }
-    const manager = await db.manager.findFirst({
-      where: { id: managerId },
-      select: { user: { select: { id: true } } },
-    });
-
-    if (!manager) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'Manager not found');
-    }
-    managerUserId = manager.user.id;
-  } else {
-    managerUserId = loggedInUser.id;
-  }
-
-  const whereClause = {
-    manager: {
-      user: {
-        id: managerUserId,
-      },
-    },
-    OR: search
-      ? [
-          { user: { name: { contains: search } } },
-          { user: { username: { contains: search } } },
-          { user: { mobile_number: { contains: search } } },
-        ]
-      : undefined,
-  };
-
-  const contractors = await db.contractor.findMany({
-    where: whereClause,
-    select: {
-      id: true,
-      firm_name: true,
-      user: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          mobile_number: true,
-          role: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      },
-      manager: {
-        select: {
-          id: true,
-          user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-            },
-          },
-        },
-      },
-      createdAt: true,
-      updatedAt: true,
-    },
-    orderBy: {
-      [sortField]: sortOrder,
-    },
-    skip: skip,
-    take: take,
-  });
-
-  const totalContractors = await db.contractor.count({
-    where: whereClause,
-  });
+    isCreatedByMe: contractor.createdById === loggedInUser.id,
+    isAssignedToMe: loggedInUser.role.name === ROLES.MANAGER && contractor.manager?.userId === loggedInUser.id,
+  }));
 
   return {
-    data: contractors,
+    data: enhancedContractors,
     pagination: {
-      total: totalContractors,
-      page: page,
-      limit: limit,
-      totalPages: Math.ceil(totalContractors / limit),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     },
   };
 };
-
 /**
- * Handler to add labour members under a specific contractor.
- * @param {number} loggedInUser - The User ID of the Manager.
- * @param {Object} data - Data for the new Labour member.
- * @returns {Object} The created Labour object without sensitive fields.
+ * Add labour with dynamic access control
  */
-
-const addLabourHandler = async (contractorId, labourData, files) => {
-  if (
-    !contractorId ||
-    !labourData ||
-    !labourData.name ||
-    !labourData.username ||
-    !labourData.password ||
-    !labourData.aadhar_number
-  ) {
+const addLabourHandler = async (loggedInUser, contractorId, labourData, files) => {
+  if (!labourData || !labourData.name || !labourData.username || !labourData.password) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Missing required fields');
   }
 
-  if (files.pdfs && files.pdfs.length > 2) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'You can upload up to 2 PDF documents');
-  }
-
-  const contractor = await db.contractor.findUnique({
-    where: { id: contractorId },
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          mobile_number: true,
-          role: true,
-        },
-      },
+  const existingUser = await db.user.findFirst({
+    where: {
+      username: labourData.username,
     },
   });
 
-  if (!contractor) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Contractor not found');
+  if (existingUser) {
+    throw new ApiError(httpStatus.CONFLICT, 'Username already exists');
+  }
+
+  if (labourData.aadhar_number) {
+    const existingLabour = await db.labour.findFirst({
+      where: {
+        aadhar_number: labourData.aadhar_number,
+      },
+    });
+
+    if (existingLabour) {
+      throw new ApiError(httpStatus.CONFLICT, 'Aadhar number already registered');
+    }
+  }
+
+  if (contractorId) {
+    const baseWhereClause = await getBaseWhereClause(loggedInUser, 'contractor');
+    const contractor = await db.contractor.findFirst({
+      where: {
+        id: contractorId,
+        ...baseWhereClause,
+      },
+    });
+
+    if (!contractor) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Contractor not found or access denied');
+    }
   }
 
   const [photoUrls, pdfUrls] = await Promise.all([
@@ -322,25 +325,18 @@ const addLabourHandler = async (contractorId, labourData, files) => {
         username: labourData.username,
         password: await hashPassword(labourData.password),
         mobile_number: labourData.mobile_number,
-        role: {
-          connect: { name: ROLES.LABOUR },
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        username: true,
-        mobile_number: true,
-        role: true,
+        role: { connect: { name: ROLES.LABOUR } },
       },
     });
 
     const labourRecord = await tx.labour.create({
       data: {
         user: { connect: { id: user.id } },
+        ...(contractorId && { contractor: { connect: { id: contractorId } } }),
         fingerprint_data: labourData.fingerprint_data,
-        contractor: { connect: { id: contractor.id } },
         aadhar_number: labourData.aadhar_number,
+        createdBy: { connect: { id: loggedInUser.id } },
+        updatedBy: { connect: { id: loggedInUser.id } },
       },
       include: {
         user: {
@@ -363,6 +359,13 @@ const addLabourHandler = async (contractorId, labourData, files) => {
                 username: true,
               },
             },
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
           },
         },
       },
@@ -421,145 +424,84 @@ const addLabourHandler = async (contractorId, labourData, files) => {
     return completeLabour;
   });
 
-  const { password, ...safeUser } = labour.user;
-  delete labour.contractorId;
-
-  return {
-    ...labour,
-    user: safeUser,
-  };
+  return labour;
 };
 
 /**
- * Handler to fetch labour members for a specific contractor with filters, sorting, and pagination.
- * @param {number} managerUserId - The User ID of the Manager.
- * @param {number} contractorId - The ID of the Contractor.
- * @param {Object} filters - Filters for fetching labour.
- * @param {string} [filters.search] - Search term to search across name, username, and mobile_number.
- * @param {string} [filters.sortBy] - Field to sort by (e.g., 'name', 'username', 'createdAt').
- * @param {string} [filters.order] - Order of sorting ('asc' or 'desc').
- * @param {number} [filters.page=1] - Page number for pagination.
- * @param {number} [filters.limit=10] - Number of labour members per page.
- * @returns {Object} Object containing labour data and pagination info.
+ * Fetch labour with dynamic access control
  */
+const getLabourHandler = async (filters = {}, loggedInUser) => {
+  const { search, sortBy = 'createdAt', order = 'desc', page = 1, limit = 10, contractorId } = filters;
 
-const getContractorLabour = async (loggedInUser, contractorId, filters = {}) => {
-  let { search, sortBy = 'createdAt', order = 'desc', page = 1, limit = 10 } = filters;
-
-  page = parseInt(page, 10);
-  limit = parseInt(limit, 10);
-
-  const sortableFields = ['name', 'username', 'designation', 'department', 'createdAt', 'updatedAt'];
-  const sortField = sortableFields.includes(sortBy) ? sortBy : 'createdAt';
-
-  const sortOrder = order.toLowerCase() === 'asc' ? 'asc' : 'desc';
-
-  const skip = (page - 1) * limit;
-  const take = limit;
-
-  const manager = await db.manager.findUnique({
-    where: {
-      userId: loggedInUser.id,
-    },
-  });
-
-  if (!manager) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Manager not found');
-  }
-
-  const contractor = await db.contractor.findFirst({
-    where: {
-      id: parseInt(contractorId, 10),
-      managerId: manager.id,
-    },
-  });
-
-  if (!contractor) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Contractor not found or does not belong to this manager');
-  }
+  const baseWhereClause = await getBaseWhereClause(loggedInUser, 'labour');
 
   const whereClause = {
-    contractorId: contractor.id,
-    OR: search
-      ? [
-          { user: { name: { contains: search } } },
-          { user: { username: { contains: search } } },
-          { user: { mobile_number: { contains: search } } },
-        ]
-      : undefined,
+    ...baseWhereClause,
+    ...(contractorId && { contractorId }),
+    ...(search && {
+      OR: [
+        { user: { name: { contains: search } } },
+        { user: { username: { contains: search } } },
+        { user: { mobile_number: { contains: search } } },
+      ],
+    }),
   };
 
-  const labour = await db.labour.findMany({
-    where: whereClause,
-    select: {
-      id: true,
-      user: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          mobile_number: true,
-          role: {
-            select: {
-              id: true,
-              name: true,
-            },
+  const [labour, total] = await Promise.all([
+    db.labour.findMany({
+      where: whereClause,
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            mobile_number: true,
+            role: true,
           },
         },
-      },
-      contractor: {
-        select: {
-          id: true,
-          firm_name: true,
-          user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-            },
-          },
-        },
-      },
-      fingerprint_data: true,
-      attendance: {
-        select: {
-          id: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      },
-      createdAt: true,
-      updatedAt: true,
-    },
-    orderBy:
-      sortField === 'name' || sortField === 'username'
-        ? {
+        contractor: {
+          select: {
+            id: true,
+            firm_name: true,
             user: {
-              [sortField]: sortOrder,
+              select: {
+                id: true,
+                name: true,
+                username: true,
+              },
             },
-          }
-        : {
-            [sortField]: sortOrder,
           },
-    skip: skip,
-    take: take,
-  });
-
-  const totalLabour = await db.labour.count({
-    where: whereClause,
-  });
+        },
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+      },
+      orderBy: { [sortBy]: order },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    db.labour.count({ where: whereClause }),
+  ]);
 
   return {
     data: labour,
     pagination: {
-      total: totalLabour,
-      page: page,
-      limit: limit,
-      totalPages: Math.ceil(totalLabour / limit),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     },
   };
 };
 
-const managerService = { addContractorHandler, fetchContractorsHandler, addLabourHandler, getContractorLabour };
-
-module.exports = managerService;
+module.exports = {
+  addContractorHandler,
+  fetchContractorsHandler,
+  addLabourHandler,
+  getLabourHandler,
+};

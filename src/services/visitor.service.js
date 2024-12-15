@@ -87,6 +87,14 @@ const processVisitorRequest = async (ticketId, status, remarks, userId) => {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid status');
   }
 
+  const existingVisitor = await db.visitor.findUnique({
+    where: { ticketId },
+  });
+
+  if (!existingVisitor) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Visitor not found');
+  }
+
   const visitor = await db.visitor.update({
     where: { ticketId },
     data: {
@@ -140,7 +148,7 @@ const getVisitorStatus = async (identifier) => {
  * @returns {Array} List of visitor requests
  */
 const listVisitorRequests = async (filters = {}) => {
-  const { status, startDate, endDate } = filters;
+  const { status, startDate, endDate, createdById } = filters;
 
   const whereClause = {};
 
@@ -153,6 +161,10 @@ const listVisitorRequests = async (filters = {}) => {
       gte: new Date(startDate),
       lte: new Date(endDate),
     };
+  }
+
+  if (createdById) {
+    whereClause.createdById = createdById;
   }
 
   const visitors = await db.visitor.findMany({

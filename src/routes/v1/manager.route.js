@@ -8,10 +8,6 @@ const upload = require('../../middlewares/uploadMiddlware');
 const managerRouter = express.Router();
 
 managerRouter
-  .route('/contractors/:id/staff')
-  .get(checkJWT, checkRole([ROLES.MANAGER, ROLES.ADMIN]), managerController.getContractorLabour);
-
-managerRouter
   .route('/contractors')
   .post(
     checkJWT,
@@ -22,16 +18,19 @@ managerRouter
     ]),
     managerController.addContractor
   )
-  .get(checkJWT, checkRole([ROLES.MANAGER, ROLES.ADMIN]), managerController.getContractors);
+  .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER]), managerController.getContractors);
 
-managerRouter.route('/staff').post(
-  checkJWT,
-  checkRole([ROLES.MANAGER, ROLES.CONTRACTOR]),
-  upload.fields([
-    { name: 'photos', maxCount: 10 },
-    { name: 'pdfs', maxCount: 5 },
-  ]),
-  managerController.addLabour
-);
+managerRouter
+  .route('/labour')
+  .post(
+    checkJWT,
+    checkRole([ROLES.ADMIN, ROLES.MANAGER]),
+    upload.fields([
+      { name: 'photos', maxCount: 10 },
+      { name: 'pdfs', maxCount: 2 },
+    ]),
+    managerController.addLabour
+  )
+  .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR]), managerController.getLabour);
 
 module.exports = managerRouter;
