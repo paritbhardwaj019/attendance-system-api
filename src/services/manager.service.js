@@ -277,6 +277,7 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
     throw new ApiError(httpStatus.BAD_REQUEST, 'Missing required fields');
   }
 
+  // Move validations outside transaction
   const existingUser = await db.user.findFirst({
     where: {
       username: labourData.username,
@@ -300,7 +301,6 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
   }
 
   let contractor = null;
-
   if (contractorId) {
     const newContractorId = await db.user.findUnique({
       where: {
@@ -321,120 +321,94 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
     }
   }
 
+  // Move file uploads outside transaction
   const [photoUrls, pdfUrls] = await Promise.all([
     uploadMultipleFilesToS3(files.photos, 'labour-photos'),
     uploadMultipleFilesToS3(files.pdfs, 'labour-pdfs'),
   ]);
 
-  const labour = await db.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: {
-        name: labourData.name,
-        username: labourData.username,
-        password: await hashPassword(labourData.password),
-        mobile_number: labourData.mobile_number,
-        role: { connect: { name: ROLES.LABOUR } },
-      },
-    });
-
-    const labourRecord = await tx.labour.create({
-      data: {
-        user: { connect: { id: user.id } },
-        ...(contractor && { contractor: { connect: { id: contractor.id } } }),
-        fingerprint_data: labourData.fingerprint_data,
-        aadhar_number: labourData.aadhar_number,
-        createdBy: { connect: { id: loggedInUser.id } },
-        updatedBy: { connect: { id: loggedInUser.id } },
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            mobile_number: true,
-            role: true,
-          },
+  // Increase timeout and optimize transaction
+  const labour = await db.$transaction(
+    async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name: labourData.name,
+          username: labourData.username,
+          password: await hashPassword(labourData.password),
+          mobile_number: labourData.mobile_number,
+          role: { connect: { name: ROLES.LABOUR } },
         },
-        contractor: {
-          select: {
-            id: true,
-            firm_name: true,
-            user: {
-              select: {
-                id: true,
-                name: true,
-                username: true,
+      });
+
+      const labourRecord = await tx.labour.create({
+        data: {
+          user: { connect: { id: user.id } },
+          ...(contractor && { contractor: { connect: { id: contractor.id } } }),
+          fingerprint_data: labourData.fingerprint_data,
+          aadhar_number: labourData.aadhar_number,
+          createdBy: { connect: { id: loggedInUser.id } },
+          updatedBy: { connect: { id: loggedInUser.id } },
+          ...(photoUrls.length > 0 && {
+            photos: {
+              createMany: {
+                data: photoUrls.map((url) => ({ url })),
+              },
+            },
+          }),
+          ...(pdfUrls.length > 0 && {
+            pdfs: {
+              createMany: {
+                data: pdfUrls.map((url) => ({ url })),
+              },
+            },
+          }),
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              mobile_number: true,
+              role: true,
+            },
+          },
+          contractor: {
+            select: {
+              id: true,
+              firm_name: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  username: true,
+                },
               },
             },
           },
-        },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-          },
-        },
-      },
-    });
-
-    if (photoUrls.length > 0) {
-      const photoRecords = photoUrls.map((url) => ({
-        url,
-        labourId: labourRecord.id,
-      }));
-      await tx.labourPhoto.createMany({
-        data: photoRecords,
-      });
-    }
-
-    if (pdfUrls.length > 0) {
-      const pdfRecords = pdfUrls.map((url) => ({
-        url,
-        labourId: labourRecord.id,
-      }));
-      await tx.labourPDF.createMany({
-        data: pdfRecords,
-      });
-    }
-
-    const completeLabour = await tx.labour.findUnique({
-      where: { id: labourRecord.id },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            mobile_number: true,
-            role: true,
-          },
-        },
-        contractor: {
-          select: {
-            id: true,
-            firm_name: true,
-            user: {
-              select: {
-                id: true,
-                name: true,
-                username: true,
-              },
+          photos: true,
+          pdfs: true,
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
             },
           },
         },
-        photos: true,
-        pdfs: true,
-      },
-    });
+      });
 
-    return completeLabour;
-  });
+      return labourRecord;
+    },
+    {
+      timeout: 10000,
+      maxWait: 5000,
+    }
+  );
 
   return labour;
 };
-
+s;
 /**
  * Fetch labour with dynamic access control
  */
