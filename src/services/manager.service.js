@@ -299,12 +299,20 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
     }
   }
 
+  let contractor = null;
+
   if (contractorId) {
-    const baseWhereClause = await getBaseWhereClause(loggedInUser, 'contractor');
-    const contractor = await db.contractor.findFirst({
+    const newContractorId = await db.user.findUnique({
       where: {
         id: contractorId,
-        ...baseWhereClause,
+      },
+    });
+
+    contractor = await db.contractor.findFirst({
+      where: {
+        user: {
+          id: newContractorId.id,
+        },
       },
     });
 
@@ -332,7 +340,7 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
     const labourRecord = await tx.labour.create({
       data: {
         user: { connect: { id: user.id } },
-        ...(contractorId && { contractor: { connect: { id: contractorId } } }),
+        ...(contractor && { contractor: { connect: { id: contractor.id } } }),
         fingerprint_data: labourData.fingerprint_data,
         aadhar_number: labourData.aadhar_number,
         createdBy: { connect: { id: loggedInUser.id } },
