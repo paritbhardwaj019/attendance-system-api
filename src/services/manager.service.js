@@ -408,7 +408,6 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
 
   return labour;
 };
-s;
 /**
  * Fetch labour with dynamic access control
  */
