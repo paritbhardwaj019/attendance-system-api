@@ -11,6 +11,8 @@ const envVarsSchema = Joi.object()
     JWT_SECRET: Joi.string().required().description('JWT secret key'),
     REFRESH_TOKEN_SECRET: Joi.string().required().description('Refresh token secret'),
     FRONTEND_URL: Joi.string().required().description('Frontend URL'),
+    DIGEST_AUTH_USERNAME: Joi.string().required().description('Digest auth username'),
+    DIGEST_AUTH_PASSWORD: Joi.string().required().description('Digest auth password'),
   })
   .unknown();
 
@@ -28,4 +30,9 @@ module.exports = {
     refreshTokenSecret: envVars.REFRESH_TOKEN_SECRET,
   },
   frontendUrl: envVars.FRONTEND_URL,
+  digestAuth: {
+    username: envVars.DIGEST_AUTH_USERNAME,
+    password: envVars.DIGEST_AUTH_PASSWORD,
+    algorithm: 'MD5',
+  },
 };

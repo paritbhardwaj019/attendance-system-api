@@ -7,6 +7,28 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ModuleType {
+  LABOUR
+  CONTRACTOR
+  VISITOR
+  PERSON
+}
+
+model SystemCode {
+  id           Int        @id @default(autoincrement())
+  moduleType   ModuleType
+  prefix       String
+  lastNumber   Int        @default(0)
+  createdBy    User       @relation("SystemCodeCreatedBy", fields: [createdById], references: [id])
+  createdById  Int
+  updatedBy    User       @relation("SystemCodeUpdatedBy", fields: [updatedById], references: [id])
+  updatedById  Int
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([moduleType])
+}
+
 model Role {
   id    Int    @id @default(autoincrement())
   name  String @unique
@@ -40,6 +62,9 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  createdSystemCodes SystemCode[] @relation("SystemCodeCreatedBy")
+  updatedSystemCodes SystemCode[] @relation("SystemCodeUpdatedBy")
 }
 
 model Admin {
@@ -63,6 +88,8 @@ model Contractor {
   user       User    @relation(fields: [userId], references: [id])
   userId     Int     @unique
   firm_name  String?
+
+  employeeNo    String  @unique 
 
   manager    Manager? @relation("ManagerContractors", fields: [managerId], references: [id])
   managerId  Int?
@@ -109,6 +136,9 @@ model Labour {
   contractorId     Int?
   fingerprint_data String
   aadhar_number    String       @unique
+
+  employeeNo       String       @unique   
+
 
   createdBy        User        @relation("LabourCreatedBy", fields: [createdById], references: [id])
   createdById      Int
