@@ -518,6 +518,8 @@ const editContractorHandler = async (loggedInUser, contractorId, contractorData,
     },
   });
 
+  console.log('existingContractor', existingContractor);
+
   if (!existingContractor) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Contractor not found or access denied');
   }
@@ -575,7 +577,7 @@ const editContractorHandler = async (loggedInUser, contractorId, contractorData,
       data: {
         firm_name: contractorData.firm_name || existingContractor.firm_name,
         aadhar_number: contractorData.aadhar_number || existingContractor.aadhar_number,
-        managerId,
+        ...(managerId && { managerId }),
         updatedBy: { connect: { id: loggedInUser.id } },
       },
       include: {

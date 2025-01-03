@@ -4,6 +4,7 @@ const userRouter = require('./user.route');
 const managerRouter = require('./manager.route');
 const attendanceRouter = require('./attendance.route');
 const visitorRouter = require('./visitor.route');
+const cameraRouter = require('./camera.route');
 
 const router = express.Router();
 
@@ -27,6 +28,10 @@ const defaultRoutes = [
   {
     path: '/visitor',
     route: visitorRouter,
+  },
+  {
+    path: '/camera',
+    route: cameraRouter,
   },
 ];
 

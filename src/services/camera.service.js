@@ -212,12 +212,50 @@ const deleteFacePictureFromCamera = async (id) => {
   }
 };
 
+/**
+ * Search users in camera system
+ * @param {string} searchId - ID to search for
+ * @param {number} position - Starting position for pagination
+ * @param {number} maxResults - Maximum number of results to return
+ */
+const searchUserInCamera = async (searchId, position = 0, maxResults = 100) => {
+  try {
+    const response = await digestAuth.request({
+      method: 'POST',
+      url: `${BASE_URL}/ISAPI/AccessControl/UserInfo/Search?format=json&devIndex=${DEV_INDEX}`,
+      data: {
+        UserInfoSearchCond: {
+          searchID: searchId,
+          searchResultPosition: position,
+          maxResults: maxResults,
+        },
+      },
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.status !== 200) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to search user in camera system');
+    }
+
+    return response.data;
+  } catch (error) {
+    console.error('Camera API Error:', error);
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      'Failed to search user in camera system: ' + (error.response?.data?.message || error.message)
+    );
+  }
+};
+
 const cameraService = {
   addFacePictureToCamera,
   deleteUserFromCamera,
   updateUserInCamera,
   deleteFacePictureFromCamera,
   addUserToCamera,
+  searchUserInCamera,
 };
 
 module.exports = cameraService;
