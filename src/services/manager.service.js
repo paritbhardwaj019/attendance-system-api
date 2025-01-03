@@ -92,90 +92,95 @@ const addContractorHandler = async (loggedInUser, contractorData, files) => {
     uploadMultipleFilesToS3(files.pdfs, 'contractor-pdfs'),
   ]);
 
-  const contractor = await db.$transaction(async (tx) => {
-    const user = await tx.user.create({
-      data: {
-        name: contractorData.name,
-        username: contractorData.username,
-        email: contractorData.email,
-        password: await hashPassword(contractorData.password),
-        mobile_number: contractorData.mobile_number,
-        role: { connect: { name: ROLES.CONTRACTOR } },
-      },
-      select: {
-        id: true,
-        name: true,
-        username: true,
-        mobile_number: true,
-        role: true,
-      },
-    });
-
-    const employeeNo = await getNextCode('CONTRACTOR');
-
-    const contractorRecord = await tx.contractor.create({
-      data: {
-        user: { connect: { id: user.id } },
-        firm_name: contractorData.firm_name,
-        employeeNo,
-        aadhar_number: contractorData.aadhar_number,
-        ...(managerId && { manager: { connect: { id: managerId } } }),
-        createdBy: { connect: { id: loggedInUser.id } },
-        updatedBy: { connect: { id: loggedInUser.id } },
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            mobile_number: true,
-            role: true,
-          },
+  const contractor = await db.$transaction(
+    async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          name: contractorData.name,
+          username: contractorData.username,
+          email: contractorData.email,
+          password: await hashPassword(contractorData.password),
+          mobile_number: contractorData.mobile_number,
+          role: { connect: { name: ROLES.CONTRACTOR } },
         },
-        manager: {
-          select: {
-            id: true,
-            user: {
-              select: {
-                id: true,
-                name: true,
-                username: true,
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          mobile_number: true,
+          role: true,
+        },
+      });
+
+      const employeeNo = await getNextCode('CONTRACTOR');
+
+      const contractorRecord = await tx.contractor.create({
+        data: {
+          user: { connect: { id: user.id } },
+          firm_name: contractorData.firm_name,
+          employeeNo,
+          aadhar_number: contractorData.aadhar_number,
+          ...(managerId && { manager: { connect: { id: managerId } } }),
+          createdBy: { connect: { id: loggedInUser.id } },
+          updatedBy: { connect: { id: loggedInUser.id } },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              mobile_number: true,
+              role: true,
+            },
+          },
+          manager: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  username: true,
+                },
               },
             },
           },
-        },
-        createdBy: {
-          select: {
-            name: true,
-            username: true,
+          createdBy: {
+            select: {
+              name: true,
+              username: true,
+            },
           },
         },
-      },
-    });
-
-    if (photoUrls.length > 0) {
-      await tx.contractorPhoto.createMany({
-        data: photoUrls.map((url) => ({
-          url,
-          contractorId: contractorRecord.id,
-        })),
       });
+
+      if (photoUrls.length > 0) {
+        await tx.contractorPhoto.createMany({
+          data: photoUrls.map((url) => ({
+            url,
+            contractorId: contractorRecord.id,
+          })),
+        });
+      }
+
+      if (pdfUrls.length > 0) {
+        await tx.contractorPDF.createMany({
+          data: pdfUrls.map((url) => ({
+            url,
+            contractorId: contractorRecord.id,
+          })),
+        });
+      }
+
+      await cameraService.addUserToCamera(employeeNo, user.name);
+
+      return contractorRecord;
+    },
+    {
+      timeout: 10000,
     }
-
-    if (pdfUrls.length > 0) {
-      await tx.contractorPDF.createMany({
-        data: pdfUrls.map((url) => ({
-          url,
-          contractorId: contractorRecord.id,
-        })),
-      });
-    }
-
-    await cameraService.addUserToCamera(employeeNo, user.name);
-
-    return contractorRecord;
-  });
+  );
 
   const { password, ...contractorWithoutPassword } = contractor;
   return contractorWithoutPassword;
@@ -339,95 +344,103 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
   let createdLabour = null;
 
   try {
-    createdLabour = await db.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          name: labourData.name,
-          username: labourData.username,
-          password: await hashPassword(labourData.password),
-          mobile_number: labourData.mobile_number,
-          role: { connect: { name: ROLES.LABOUR } },
-        },
-      });
-
-      const employeeNo = await getNextCode('LABOUR');
-
-      const labourRecord = await tx.labour.create({
-        data: {
-          user: { connect: { id: user.id } },
-          employeeNo,
-          ...(contractor && { contractor: { connect: { id: contractor.id } } }),
-          fingerprint_data: labourData.fingerprint_data,
-          aadhar_number: labourData.aadhar_number,
-          createdBy: { connect: { id: loggedInUser.id } },
-          updatedBy: { connect: { id: loggedInUser.id } },
-          ...(photoUrls.length > 0 && {
-            photos: {
-              createMany: {
-                data: photoUrls.map((url) => ({ url })),
-              },
-            },
-          }),
-          ...(pdfUrls.length > 0 && {
-            pdfs: {
-              createMany: {
-                data: pdfUrls.map((url) => ({ url })),
-              },
-            },
-          }),
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-              mobile_number: true,
-              role: true,
-            },
+    createdLabour = await db.$transaction(
+      async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            name: labourData.name,
+            username: labourData.username,
+            password: await hashPassword(labourData.password),
+            mobile_number: labourData.mobile_number,
+            role: { connect: { name: ROLES.LABOUR } },
           },
+        });
 
-          contractor: {
-            select: {
-              id: true,
-              firm_name: true,
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  username: true,
+        const employeeNo = await getNextCode('LABOUR');
+
+        const labourRecord = await tx.labour.create({
+          data: {
+            user: { connect: { id: user.id } },
+            employeeNo,
+            ...(contractor && { contractor: { connect: { id: contractor.id } } }),
+            fingerprint_data: labourData.fingerprint_data,
+            aadhar_number: labourData.aadhar_number,
+            createdBy: { connect: { id: loggedInUser.id } },
+            updatedBy: { connect: { id: loggedInUser.id } },
+            ...(photoUrls.length > 0 && {
+              photos: {
+                createMany: {
+                  data: photoUrls.map((url) => ({ url })),
+                },
+              },
+            }),
+            ...(pdfUrls.length > 0 && {
+              pdfs: {
+                createMany: {
+                  data: pdfUrls.map((url) => ({ url })),
+                },
+              },
+            }),
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                username: true,
+                mobile_number: true,
+                role: true,
+              },
+            },
+
+            contractor: {
+              select: {
+                id: true,
+                firm_name: true,
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    username: true,
+                  },
                 },
               },
             },
-          },
-          photos: true,
-          pdfs: true,
-          createdBy: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
+            photos: true,
+            pdfs: true,
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                username: true,
+              },
             },
           },
-        },
-      });
+        });
 
-      await cameraService.addUserToCamera(employeeNo, user.name);
+        await cameraService.addUserToCamera(employeeNo, user.name);
 
-      return labourRecord;
-    });
+        return labourRecord;
+      },
+      { timeout: 10000 }
+    );
 
     return createdLabour;
   } catch (error) {
     if (createdLabour) {
-      await db.$transaction(async (tx) => {
-        await tx.labour.delete({
-          where: { id: createdLabour.id },
-        });
-        await tx.user.delete({
-          where: { id: createdLabour.user.id },
-        });
-      });
+      await db.$transaction(
+        async (tx) => {
+          await tx.labour.delete({
+            where: { id: createdLabour.id },
+          });
+          await tx.user.delete({
+            where: { id: createdLabour.user.id },
+          });
+        },
+        {
+          timeout: 5000,
+        }
+      );
     }
     throw error;
   }
@@ -560,77 +573,80 @@ const editContractorHandler = async (loggedInUser, contractorId, contractorData,
     files?.pdfs ? uploadMultipleFilesToS3(files.pdfs, 'contractor-pdfs') : [],
   ]);
 
-  const updatedContractor = await db.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: existingContractor.user.id },
-      data: {
-        name: contractorData.name || existingContractor.user.name,
-        username: contractorData.username || existingContractor.user.username,
-        email: contractorData.email || existingContractor.user.email,
-        ...(contractorData.password && { password: await hashPassword(contractorData.password) }),
-        mobile_number: contractorData.mobile_number || existingContractor.user.mobile_number,
-      },
-    });
-
-    const contractorRecord = await tx.contractor.update({
-      where: { id: contractorId },
-      data: {
-        firm_name: contractorData.firm_name || existingContractor.firm_name,
-        aadhar_number: contractorData.aadhar_number || existingContractor.aadhar_number,
-        ...(managerId && { managerId }),
-        updatedBy: { connect: { id: loggedInUser.id } },
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            mobile_number: true,
-            role: true,
-          },
+  const updatedContractor = await db.$transaction(
+    async (tx) => {
+      await tx.user.update({
+        where: { id: existingContractor.user.id },
+        data: {
+          name: contractorData.name || existingContractor.user.name,
+          username: contractorData.username || existingContractor.user.username,
+          email: contractorData.email || existingContractor.user.email,
+          ...(contractorData.password && { password: await hashPassword(contractorData.password) }),
+          mobile_number: contractorData.mobile_number || existingContractor.user.mobile_number,
         },
-        manager: {
-          select: {
-            id: true,
-            user: {
-              select: {
-                id: true,
-                name: true,
-                username: true,
+      });
+
+      const contractorRecord = await tx.contractor.update({
+        where: { id: contractorId },
+        data: {
+          firm_name: contractorData.firm_name || existingContractor.firm_name,
+          aadhar_number: contractorData.aadhar_number || existingContractor.aadhar_number,
+          ...(managerId && { managerId }),
+          updatedBy: { connect: { id: loggedInUser.id } },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              mobile_number: true,
+              role: true,
+            },
+          },
+          manager: {
+            select: {
+              id: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  username: true,
+                },
               },
             },
           },
-        },
-        createdBy: {
-          select: {
-            name: true,
-            username: true,
+          createdBy: {
+            select: {
+              name: true,
+              username: true,
+            },
           },
         },
-      },
-    });
-
-    if (photoUrls.length > 0) {
-      await tx.contractorPhoto.createMany({
-        data: photoUrls.map((url) => ({
-          url,
-          contractorId: contractorRecord.id,
-        })),
       });
-    }
 
-    if (pdfUrls.length > 0) {
-      await tx.contractorPDF.createMany({
-        data: pdfUrls.map((url) => ({
-          url,
-          contractorId: contractorRecord.id,
-        })),
-      });
-    }
+      if (photoUrls.length > 0) {
+        await tx.contractorPhoto.createMany({
+          data: photoUrls.map((url) => ({
+            url,
+            contractorId: contractorRecord.id,
+          })),
+        });
+      }
 
-    return contractorRecord;
-  });
+      if (pdfUrls.length > 0) {
+        await tx.contractorPDF.createMany({
+          data: pdfUrls.map((url) => ({
+            url,
+            contractorId: contractorRecord.id,
+          })),
+        });
+      }
+
+      return contractorRecord;
+    },
+    { timeout: 10000 }
+  );
 
   return updatedContractor;
 };
@@ -662,27 +678,30 @@ const deleteContractorHandler = async (loggedInUser, contractorId) => {
     throw new ApiError(httpStatus.CONFLICT, 'Cannot delete contractor with associated labour');
   }
 
-  await db.$transaction(async (tx) => {
-    if (contractor.photos.length > 0) {
-      await tx.contractorPhoto.deleteMany({
-        where: { contractorId },
+  await db.$transaction(
+    async (tx) => {
+      if (contractor.photos.length > 0) {
+        await tx.contractorPhoto.deleteMany({
+          where: { contractorId },
+        });
+      }
+
+      if (contractor.pdfs.length > 0) {
+        await tx.contractorPDF.deleteMany({
+          where: { contractorId },
+        });
+      }
+
+      await tx.contractor.delete({
+        where: { id: contractorId },
       });
-    }
 
-    if (contractor.pdfs.length > 0) {
-      await tx.contractorPDF.deleteMany({
-        where: { contractorId },
+      await tx.user.delete({
+        where: { id: contractor.userId },
       });
-    }
-
-    await tx.contractor.delete({
-      where: { id: contractorId },
-    });
-
-    await tx.user.delete({
-      where: { id: contractor.userId },
-    });
-  });
+    },
+    { timeout: 10000 }
+  );
 
   await cameraService.deleteUserFromCamera(contractor.employeeNo);
   // if (contractor.photos.length > 0) {
@@ -712,27 +731,30 @@ const deleteLabourHandler = async (loggedInUser, labourId) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'Labour not found or access denied');
   }
 
-  await db.$transaction(async (tx) => {
-    if (labour.photos.length > 0) {
-      await tx.labourPhoto.deleteMany({
-        where: { labourId },
+  await db.$transaction(
+    async (tx) => {
+      if (labour.photos.length > 0) {
+        await tx.labourPhoto.deleteMany({
+          where: { labourId },
+        });
+      }
+
+      if (labour.pdfs.length > 0) {
+        await tx.labourPDF.deleteMany({
+          where: { labourId },
+        });
+      }
+
+      await tx.labour.delete({
+        where: { id: labourId },
       });
-    }
 
-    if (labour.pdfs.length > 0) {
-      await tx.labourPDF.deleteMany({
-        where: { labourId },
+      await tx.user.delete({
+        where: { id: labour.userId },
       });
-    }
-
-    await tx.labour.delete({
-      where: { id: labourId },
-    });
-
-    await tx.user.delete({
-      where: { id: labour.userId },
-    });
-  });
+    },
+    { timeout: 10000 }
+  );
 
   await cameraService.deleteUserFromCamera(labour.employeeNo);
   // if (labour.photos.length > 0) {
@@ -807,86 +829,91 @@ const editLabourHandler = async (loggedInUser, labourId, labourData, files) => {
     files?.pdfs ? uploadMultipleFilesToS3(files.pdfs, 'labour-pdfs') : [],
   ]);
 
-  const updatedLabour = await db.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: existingLabour.user.id },
-      data: {
-        name: labourData.name || existingLabour.user.name,
-        username: labourData.username || existingLabour.user.username,
-        ...(labourData.password && { password: await hashPassword(labourData.password) }),
-        mobile_number: labourData.mobile_number || existingLabour.user.mobile_number,
-      },
-    });
-
-    const labourRecord = await tx.labour.update({
-      where: { id: labourId },
-      data: {
-        aadhar_number: labourData.aadhar_number || existingLabour.aadhar_number,
-        fingerprint_data: labourData.fingerprint_data || existingLabour.fingerprint_data,
-        ...(contractor && { contractor: { connect: { id: contractor.id } } }),
-        updatedBy: { connect: { id: loggedInUser.id } },
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            mobile_number: true,
-            role: true,
-          },
+  const updatedLabour = await db.$transaction(
+    async (tx) => {
+      await tx.user.update({
+        where: { id: existingLabour.user.id },
+        data: {
+          name: labourData.name || existingLabour.user.name,
+          username: labourData.username || existingLabour.user.username,
+          ...(labourData.password && { password: await hashPassword(labourData.password) }),
+          mobile_number: labourData.mobile_number || existingLabour.user.mobile_number,
         },
-        contractor: {
-          select: {
-            id: true,
-            firm_name: true,
-            user: {
-              select: {
-                id: true,
-                name: true,
-                username: true,
+      });
+
+      const labourRecord = await tx.labour.update({
+        where: { id: labourId },
+        data: {
+          aadhar_number: labourData.aadhar_number || existingLabour.aadhar_number,
+          fingerprint_data: labourData.fingerprint_data || existingLabour.fingerprint_data,
+          ...(contractor && { contractor: { connect: { id: contractor.id } } }),
+          updatedBy: { connect: { id: loggedInUser.id } },
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              mobile_number: true,
+              role: true,
+            },
+          },
+          contractor: {
+            select: {
+              id: true,
+              firm_name: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  username: true,
+                },
               },
             },
           },
-        },
-        photos: true,
-        pdfs: true,
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
+          photos: true,
+          pdfs: true,
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+            },
           },
         },
-      },
-    });
-
-    if (photoUrls.length > 0) {
-      await tx.labourPhoto.createMany({
-        data: photoUrls.map((url) => ({
-          url,
-          labourId: labourRecord.id,
-        })),
       });
+
+      if (photoUrls.length > 0) {
+        await tx.labourPhoto.createMany({
+          data: photoUrls.map((url) => ({
+            url,
+            labourId: labourRecord.id,
+          })),
+        });
+      }
+
+      if (pdfUrls.length > 0) {
+        await tx.labourPDF.createMany({
+          data: pdfUrls.map((url) => ({
+            url,
+            labourId: labourRecord.id,
+          })),
+        });
+      }
+
+      // if (files?.photos && files.photos.length > 0) {
+      //   const photoBuffer = files.photos[0].buffer;
+      //   await cameraService.deleteFacePictureFromCamera(existingLabour.employeeNo);
+      //   await cameraService.addFacePictureToCamera(existingLabour.employeeNo, photoBuffer);
+      // }
+
+      return labourRecord;
+    },
+    {
+      timeout: 10000,
     }
-
-    if (pdfUrls.length > 0) {
-      await tx.labourPDF.createMany({
-        data: pdfUrls.map((url) => ({
-          url,
-          labourId: labourRecord.id,
-        })),
-      });
-    }
-
-    // if (files?.photos && files.photos.length > 0) {
-    //   const photoBuffer = files.photos[0].buffer;
-    //   await cameraService.deleteFacePictureFromCamera(existingLabour.employeeNo);
-    //   await cameraService.addFacePictureToCamera(existingLabour.employeeNo, photoBuffer);
-    // }
-
-    return labourRecord;
-  });
+  );
 
   return updatedLabour;
 };
