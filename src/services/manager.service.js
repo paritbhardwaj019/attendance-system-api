@@ -323,7 +323,7 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
       },
     });
 
-    contractor = await db.contractor.findUnique({
+    contractor = await db.contractor.findFirst({
       where: {
         user: {
           id: newContractorId.id,

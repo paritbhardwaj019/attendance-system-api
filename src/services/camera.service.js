@@ -3,6 +3,7 @@ const FormData = require('form-data');
 const AxiosDigestAuth = require('@mhoc/axios-digest-auth').default;
 const ApiError = require('../utils/ApiError');
 const config = require('../config/config');
+const db = require('../database/prisma');
 
 const BASE_URL = 'http://43.224.222.244:85';
 const DEV_INDEX = '20F57640-5C66-49B3-86D5-750E856BEA4A';
@@ -218,14 +219,14 @@ const deleteFacePictureFromCamera = async (id) => {
  * @param {number} position - Starting position for pagination
  * @param {number} maxResults - Maximum number of results to return
  */
-const searchUserInCamera = async (searchId, position = 0, maxResults = 100) => {
+const searchUserInCamera = async (position = 0, maxResults = 100) => {
   try {
     const response = await digestAuth.request({
       method: 'POST',
       url: `${BASE_URL}/ISAPI/AccessControl/UserInfo/Search?format=json&devIndex=${DEV_INDEX}`,
       data: {
         UserInfoSearchCond: {
-          searchID: searchId,
+          searchID: Math.random().toString(36).substring(2, 15),
           searchResultPosition: position,
           maxResults: maxResults,
         },
@@ -235,13 +236,36 @@ const searchUserInCamera = async (searchId, position = 0, maxResults = 100) => {
       },
     });
 
+    const [contractors, labours] = await Promise.all([
+      db.contractor.findMany({
+        select: {
+          employeeNo: true,
+        },
+      }),
+      db.labour.findMany({
+        select: {
+          employeeNo: true,
+        },
+      }),
+    ]);
+
+    const dbEmployeeNos = new Set([...contractors.map((c) => c.employeeNo), ...labours.map((l) => l.employeeNo)]);
+
     if (response.status !== 200) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to search user in camera system');
     }
 
-    return response.data;
+    const filteredUsers = response.data.UserInfoSearch.UserInfo.filter((user) => dbEmployeeNos.has(user.employeeNo));
+
+    return {
+      ...response.data,
+      UserInfoSearch: {
+        ...response.data.UserInfoSearch,
+        UserInfo: filteredUsers,
+        numOfMatches: filteredUsers.length,
+      },
+    };
   } catch (error) {
-    console.error('Camera API Error:', error);
     throw new ApiError(
       httpStatus.BAD_REQUEST,
       'Failed to search user in camera system: ' + (error.response?.data?.message || error.message)
