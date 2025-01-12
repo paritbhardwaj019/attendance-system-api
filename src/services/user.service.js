@@ -3,6 +3,8 @@ const db = require('../database/prisma');
 const ApiError = require('../utils/ApiError');
 const { hashPassword } = require('../utils/utils');
 const { ROLES } = require('../config/roles');
+const cameraService = require('./camera.service');
+const { getNextCode } = require('./systemCode.service');
 
 /**
  * Handler to create a new user.
@@ -34,28 +36,36 @@ const createUserHandler = async (userData) => {
       },
     });
 
+    let employeeNo;
+
     switch (userData.user_type) {
       case ROLES.ADMIN:
+        employeeNo = await getNextCode('ADMIN');
         await prisma.admin.create({
           data: {
             user: { connect: { id: user.id } },
+            employeeNo,
           },
         });
         break;
 
       case ROLES.MANAGER:
+        employeeNo = await getNextCode('MANAGER');
         await prisma.manager.create({
           data: {
             user: { connect: { id: user.id } },
+            employeeNo,
           },
         });
         break;
 
       case ROLES.CONTRACTOR:
+        employeeNo = await getNextCode('CONTRACTOR');
         await prisma.contractor.create({
           data: {
             user: { connect: { id: user.id } },
             firm_name: userData.firm_name,
+            employeeNo,
             manager: userData.manager_id
               ? {
                   connect: { id: userData.manager_id },
@@ -63,19 +73,23 @@ const createUserHandler = async (userData) => {
               : undefined,
           },
         });
+        await cameraService.addUserToCamera(employeeNo, user.name);
         break;
 
       case ROLES.LABOUR:
         if (!userData.contractor_id || !userData.fingerprint_data) {
           throw new ApiError(httpStatus.BAD_REQUEST, 'Contractor ID and fingerprint data required for Labour');
         }
+        employeeNo = await getNextCode('LABOUR');
         await prisma.labour.create({
           data: {
             user: { connect: { id: user.id } },
             contractor: { connect: { id: userData.contractor_id } },
             fingerprint_data: userData.fingerprint_data,
+            employeeNo,
           },
         });
+        await cameraService.addUserToCamera(employeeNo, user.name);
         break;
 
       default:
@@ -94,12 +108,7 @@ const createUserHandler = async (userData) => {
             labour: true,
           },
         },
-        labour: {
-          include: {
-            contractor: true,
-            attendance: true,
-          },
-        },
+        labour: true,
       },
     });
 
@@ -108,7 +117,6 @@ const createUserHandler = async (userData) => {
     }
 
     delete createdUser.password;
-
     return createdUser;
   });
 };
@@ -188,6 +196,12 @@ const fetchUsersHandler = async (filters = {}) => {
           userId: true,
           firm_name: true,
           managerId: true,
+          photos: {
+            select: {
+              id: true,
+              url: true,
+            },
+          },
           manager: {
             select: {
               id: true,
@@ -210,6 +224,12 @@ const fetchUsersHandler = async (filters = {}) => {
           userId: true,
           contractorId: true,
           fingerprint_data: true,
+          photos: {
+            select: {
+              id: true,
+              url: true,
+            },
+          },
           attendance: {
             select: {
               id: true,

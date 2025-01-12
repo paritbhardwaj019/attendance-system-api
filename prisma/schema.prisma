@@ -8,6 +8,8 @@ datasource db {
 }
 
 enum ModuleType {
+  ADMIN
+  MANAGER
   LABOUR
   CONTRACTOR
   VISITOR
@@ -71,6 +73,8 @@ model Admin {
   id     Int  @id @default(autoincrement())
   user   User @relation(fields: [userId], references: [id])
   userId Int  @unique
+  employeeNo String   @unique
+
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -80,6 +84,8 @@ model Manager {
   id          Int          @id @default(autoincrement())
   user        User         @relation(fields: [userId], references: [id])
   userId      Int          @unique
+  employeeNo  String       @unique
+
   contractors Contractor[] @relation("ManagerContractors")
 }
 

@@ -215,11 +215,13 @@ const deleteFacePictureFromCamera = async (id) => {
 
 /**
  * Search users in camera system
- * @param {string} searchId - ID to search for
- * @param {number} position - Starting position for pagination
- * @param {number} maxResults - Maximum number of results to return
+ * @param {number} page - Page number for pagination (starts from 1)
+ * @param {number} limit - Number of results per page
+ * @param {string} name - Name to search for (optional)
+ * @param {Date} startDate - Start date for attendance range (defaults to today)
+ * @param {Date} endDate - End date for attendance range (defaults to today)
  */
-const searchUserInCamera = async (position = 0, maxResults = 100) => {
+const searchUserInCamera = async (page = 1, limit = 10, name = '', startDate = new Date(), endDate = new Date()) => {
   try {
     const response = await digestAuth.request({
       method: 'POST',
@@ -227,8 +229,8 @@ const searchUserInCamera = async (position = 0, maxResults = 100) => {
       data: {
         UserInfoSearchCond: {
           searchID: Math.random().toString(36).substring(2, 15),
-          searchResultPosition: position,
-          maxResults: maxResults,
+          searchResultPosition: 0,
+          maxResults: 10000,
         },
       },
       headers: {
@@ -255,14 +257,47 @@ const searchUserInCamera = async (position = 0, maxResults = 100) => {
       throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to search user in camera system');
     }
 
-    const filteredUsers = response.data.UserInfoSearch.UserInfo.filter((user) => dbEmployeeNos.has(user.employeeNo));
+    let filteredUsers = response.data.UserInfoSearch.UserInfo.filter((user) => dbEmployeeNos.has(user.employeeNo));
+
+    // Filter by name if provided
+    if (name) {
+      const searchTerm = name.toLowerCase();
+      filteredUsers = filteredUsers.filter(
+        (user) => user.name.toLowerCase().includes(searchTerm) || user.employeeNo.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    // Filter by date range
+    const startTimestamp = startDate.getTime();
+    const endTimestamp = endDate.getTime();
+    filteredUsers = filteredUsers.filter((user) => {
+      const validBeginTime = new Date(user.Valid.beginTime).getTime();
+      const validEndTime = new Date(user.Valid.endTime).getTime();
+      return validBeginTime <= endTimestamp && validEndTime >= startTimestamp;
+    });
+
+    // Apply pagination
+    const startIndex = (page - 1) * limit;
+    const paginatedUsers = filteredUsers.slice(startIndex, startIndex + limit);
+
+    // Group attendance data by date
+    const attendanceByDate = paginatedUsers.reduce((acc, user) => {
+      // Using the validBeginTime as the attendance date
+      const attendanceDate = new Date(user.Valid.beginTime).toISOString().split('T')[0];
+      if (!acc[attendanceDate]) {
+        acc[attendanceDate] = [];
+      }
+      acc[attendanceDate].push(user);
+      return acc;
+    }, {});
 
     return {
       ...response.data,
       UserInfoSearch: {
         ...response.data.UserInfoSearch,
-        UserInfo: filteredUsers,
+        UserInfo: attendanceByDate,
         numOfMatches: filteredUsers.length,
+        paginatedMatches: paginatedUsers.length,
       },
     };
   } catch (error) {
@@ -272,7 +307,6 @@ const searchUserInCamera = async (position = 0, maxResults = 100) => {
     );
   }
 };
-
 const cameraService = {
   addFacePictureToCamera,
   deleteUserFromCamera,

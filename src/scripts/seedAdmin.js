@@ -11,6 +11,7 @@ const ADMIN_ERRORS = {
   ADMIN_EXISTS: 'An admin user already exists:',
   USERNAME_EXISTS: 'Username already exists',
   MOBILE_INVALID: 'Mobile number must be a valid number',
+  SYSTEM_CODE_NOT_FOUND: 'System code for ADMIN not found. Please run initializeDefaultCodes.js first.',
 };
 
 const schema = {
@@ -93,6 +94,9 @@ const createAdminUser = async (adminData, roleId) => {
   const { name, username, password, mobile_number } = adminData;
   const hashedPassword = await hashPassword(password);
 
+  const adminCount = await prisma.admin.count();
+  const employeeNo = `ADM${String(adminCount + 1).padStart(6, '0')}`;
+
   return prisma.user.create({
     data: {
       name,
@@ -101,7 +105,9 @@ const createAdminUser = async (adminData, roleId) => {
       mobile_number,
       roleId,
       admin: {
-        create: {},
+        create: {
+          employeeNo,
+        },
       },
     },
     include: {
@@ -130,7 +136,7 @@ async function seedAdmin() {
 
     const adminUser = await createAdminUser(userData, adminRole.id);
 
-    logger.info(`Admin user '${adminUser.username}' created successfully ❤️`);
+    logger.info(`Admin user '${adminUser.username}' created successfully with employeeNo: ${adminUser.admin.employeeNo} ❤️`);
   } catch (error) {
     logger.error('Error creating admin user:', error.message);
     process.exit(1);

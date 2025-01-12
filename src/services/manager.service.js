@@ -193,23 +193,6 @@ const fetchContractorsHandler = async (filters = {}, loggedInUser) => {
 
   let whereClause = {};
 
-  if (loggedInUser.role === ROLES.ADMIN) {
-    whereClause = {
-      createdById: loggedInUser.id,
-    };
-  } else if (loggedInUser.role === ROLES.MANAGER) {
-    whereClause = {
-      OR: [
-        { createdById: loggedInUser.id },
-        {
-          manager: {
-            userId: loggedInUser.id,
-          },
-        },
-      ],
-    };
-  }
-
   if (search) {
     whereClause = {
       AND: [
@@ -225,7 +208,6 @@ const fetchContractorsHandler = async (filters = {}, loggedInUser) => {
     };
   }
 
-  // Execute query with pagination
   const [contractors, total] = await Promise.all([
     db.contractor.findMany({
       where: whereClause,
@@ -269,7 +251,6 @@ const fetchContractorsHandler = async (filters = {}, loggedInUser) => {
   const enhancedContractors = contractors.map((contractor) => ({
     ...contractor,
     isCreatedByMe: contractor.createdById === loggedInUser.id,
-    isAssignedToMe: loggedInUser.role.name === ROLES.MANAGER && contractor.manager?.userId === loggedInUser.id,
   }));
 
   return {
@@ -452,10 +433,7 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
 const getLabourHandler = async (filters = {}, loggedInUser) => {
   const { search, sortBy = 'createdAt', order = 'desc', page = 1, limit = 10, contractorId } = filters;
 
-  const baseWhereClause = await getBaseWhereClause(loggedInUser, 'labour');
-
   const whereClause = {
-    ...baseWhereClause,
     ...(contractorId && { contractorId }),
     ...(search && {
       OR: [
