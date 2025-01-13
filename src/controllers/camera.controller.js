@@ -12,7 +12,6 @@ const searchUser = catchAsync(async (req, res) => {
   const limit = parseInt(req.query.limit, 10) || 10;
   const name = req.query.name || '';
 
-  // Parse dates from query parameters or use today's date
   const today = new Date();
   const startDate = req.query.startDate ? new Date(req.query.startDate) : today;
   const endDate = req.query.endDate ? new Date(req.query.endDate) : today;

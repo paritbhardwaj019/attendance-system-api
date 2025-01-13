@@ -42,9 +42,6 @@ const getBaseWhereClause = async (loggedInUser, type) => {
   return whereClause;
 };
 
-/**
- * Add a new contractor with dynamic access control
- */
 const addContractorHandler = async (loggedInUser, contractorData, files) => {
   if (!contractorData || !contractorData.name || !contractorData.username || !contractorData.password) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Missing required fields');
@@ -175,6 +172,16 @@ const addContractorHandler = async (loggedInUser, contractorData, files) => {
 
       await cameraService.addUserToCamera(employeeNo, user.name);
 
+      if (files && files.photos && files.photos.length > 0) {
+        try {
+          const photoFile = files.photos[0];
+
+          await cameraService.addFacePicturesToCamera(employeeNo, photoFile);
+        } catch (error) {
+          throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to add face picture to camera system: ' + error.message);
+        }
+      }
+
       return contractorRecord;
     },
     {
@@ -240,6 +247,8 @@ const fetchContractorsHandler = async (filters = {}, loggedInUser) => {
             username: true,
           },
         },
+        photos: true,
+        pdfs: true,
       },
       orderBy: { [sortBy]: order },
       skip: (page - 1) * limit,
@@ -373,7 +382,6 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
                 role: true,
               },
             },
-
             contractor: {
               select: {
                 id: true,
@@ -401,6 +409,15 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
 
         await cameraService.addUserToCamera(employeeNo, user.name);
 
+        if (files && files.photos && files.photos.length > 0) {
+          try {
+            const photoFile = files.photos[0];
+            await cameraService.addFacePicturesToCamera(employeeNo, photoFile);
+          } catch (error) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to add face picture to camera system: ' + error.message);
+          }
+        }
+
         return labourRecord;
       },
       { timeout: 10000 }
@@ -426,7 +443,6 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
     throw error;
   }
 };
-
 /**
  * Fetch labour with dynamic access control
  */
@@ -477,6 +493,8 @@ const getLabourHandler = async (filters = {}, loggedInUser) => {
             username: true,
           },
         },
+        photos: true,
+        pdfs: true,
       },
       orderBy: { [sortBy]: order },
       skip: (page - 1) * limit,

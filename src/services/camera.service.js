@@ -4,6 +4,9 @@ const AxiosDigestAuth = require('@mhoc/axios-digest-auth').default;
 const ApiError = require('../utils/ApiError');
 const config = require('../config/config');
 const db = require('../database/prisma');
+const fs = require('fs');
+const path = require('path');
+const axios = require('axios');
 
 const BASE_URL = 'http://43.224.222.244:85';
 const DEV_INDEX = '20F57640-5C66-49B3-86D5-750E856BEA4A';
@@ -40,6 +43,10 @@ const addUserToCamera = async (id, name) => {
       },
     });
 
+    console.log(id);
+
+    console.log('HERE', 'user is here', response.data);
+
     if (response.status !== 200) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to add user to camera system');
     }
@@ -54,36 +61,68 @@ const addUserToCamera = async (id, name) => {
   }
 };
 
-/**
- * Add face picture to camera system
- * @param {string} id - User ID from our system
- * @param {Buffer} photoBuffer - Photo buffer
- */
-const addFacePictureToCamera = async (id, photoBuffer) => {
+const addFacePicturesToCamera = async (id, photo) => {
   try {
-    const formData = new FormData();
-    formData.append('file', photoBuffer, {
-      filename: 'face.jpg',
+    if (!fs.existsSync(photo.path)) {
+      throw new Error('Photo file does not exist at path: ' + photo.path);
+    }
+
+    const boundary = '----WebKitFormBoundary8qzjjWmAt8tSxqen';
+
+    let data = new FormData();
+
+    data.append('data', JSON.stringify({ FaceInfo: { employeeNo: id } }), {
+      contentType: 'application/json',
+    });
+
+    data.append('FaceDataRecord', fs.createReadStream(photo.path), {
+      filename: path.basename(photo.path),
       contentType: 'image/jpeg',
     });
 
-    formData.append(
-      'data',
-      JSON.stringify({
-        FaceInfo: {
-          employeeNo: id,
+    console.log('FormData:', {
+      data: JSON.stringify({ FaceInfo: { employeeNo: id } }),
+      FaceDataRecord: {
+        value: fs.createReadStream(photo.path),
+        options: {
+          filename: path.basename(photo.path),
+          contentType: 'image/jpeg',
         },
-      })
-    );
-
-    const response = await digestAuth.request({
-      method: 'POST',
-      url: `${BASE_URL}/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json&devIndex=${DEV_INDEX}`,
-      data: formData,
-      headers: {
-        ...formData.getHeaders(),
       },
     });
+
+    const headers = {
+      ...data.getHeaders(),
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      Accept: '*/*',
+      Host: '43.224.222.244:85',
+      'If-Modified-Since': '0',
+      'Accept-Encoding': 'gzip, deflate',
+      'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7',
+      'Cache-Control': 'max-age=0',
+      Connection: 'keep-alive',
+      Origin: 'http://43.224.222.244:85',
+      Referer: 'http://43.224.222.244:85/',
+      'X-Requested-With': 'XMLHttpRequest',
+      Cookie:
+        'WebSession_d09737e993=6564363563633066393363373064373938383532306366616238326431326565; _dd_s=logs=1&id=b4e87819-96e5-4884-b86b-149fb5ea20f3&created=1736794034152&expire=1736795296044',
+      SessionTag: '8b7438c1654aabfda8e831c8a5fc855fc8a6b9c91cba97f646e1123cf6cf95f3',
+      'User-Agent':
+        'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
+    };
+
+    let config = {
+      method: 'post',
+      maxBodyLength: Infinity,
+      url: `${BASE_URL}/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json&devIndex=${DEV_INDEX}`,
+      headers: headers,
+      data: data,
+      timeout: 30000,
+    };
+
+    const response = await digestAuth.request(config);
+
+    fs.unlinkSync(photo.path);
 
     if (response.status !== 200) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to add face picture to camera system');
@@ -91,14 +130,15 @@ const addFacePictureToCamera = async (id, photoBuffer) => {
 
     return response.data;
   } catch (error) {
-    console.error('Camera API Error:', error);
+    if (photo && photo.path) {
+      fs.unlinkSync(photo.path);
+    }
     throw new ApiError(
       httpStatus.BAD_REQUEST,
       'Failed to add face picture to camera system: ' + (error.response?.data?.message || error.message)
     );
   }
 };
-
 /**
  * Delete user from camera system
  * @param {string} id - User ID from our system
@@ -251,6 +291,9 @@ const searchUserInCamera = async (page = 1, limit = 10, name = '', startDate = n
       }),
     ]);
 
+    console.log('CONTRACTORS', contractors);
+    console.log('LABOURS', labours);
+
     const dbEmployeeNos = new Set([...contractors.map((c) => c.employeeNo), ...labours.map((l) => l.employeeNo)]);
 
     if (response.status !== 200) {
@@ -307,8 +350,9 @@ const searchUserInCamera = async (page = 1, limit = 10, name = '', startDate = n
     );
   }
 };
+
 const cameraService = {
-  addFacePictureToCamera,
+  addFacePicturesToCamera,
   deleteUserFromCamera,
   updateUserInCamera,
   deleteFacePictureFromCamera,

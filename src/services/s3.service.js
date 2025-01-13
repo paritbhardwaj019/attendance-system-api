@@ -1,5 +1,6 @@
 const AWS = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
 
 const s3 = new AWS.S3({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
@@ -16,18 +17,25 @@ const s3 = new AWS.S3({
 const uploadFileToS3 = async (file, folder) => {
   if (!file) return null;
 
-  const fileExtension = file.originalname.split('.').pop();
-  const key = `${folder}/${uuidv4()}.${fileExtension}`;
+  try {
+    const fileContent = fs.readFileSync(file.path);
 
-  const params = {
-    Bucket: process.env.AWS_S3_BUCKET_NAME,
-    Key: key,
-    Body: file.buffer,
-    ContentType: file.mimetype,
-  };
+    const fileExtension = file.originalname.split('.').pop();
+    const key = `${folder}/${uuidv4()}.${fileExtension}`;
 
-  const data = await s3.upload(params).promise();
-  return data.Location;
+    const params = {
+      Bucket: process.env.AWS_S3_BUCKET_NAME,
+      Key: key,
+      Body: fileContent,
+      ContentType: file.mimetype,
+    };
+
+    const data = await s3.upload(params).promise();
+
+    return data.Location;
+  } catch (error) {
+    throw error;
+  }
 };
 
 /**
@@ -39,9 +47,14 @@ const uploadFileToS3 = async (file, folder) => {
 const uploadMultipleFilesToS3 = async (files, folder) => {
   if (!files || files.length === 0) return [];
 
-  const uploadPromises = files.map((file) => uploadFileToS3(file, folder));
-  const urls = await Promise.all(uploadPromises);
-  return urls;
+  try {
+    const uploadPromises = files.map((file) => uploadFileToS3(file, folder));
+    const urls = await Promise.all(uploadPromises);
+    return urls.filter((url) => url !== null);
+  } catch (error) {
+    console.error('Error uploading files to S3:', error);
+    throw error;
+  }
 };
 
 module.exports = { uploadFileToS3, uploadMultipleFilesToS3 };
