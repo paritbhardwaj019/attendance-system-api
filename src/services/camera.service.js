@@ -330,8 +330,6 @@ const searchUserInCamera = async (page = 1, limit = 10, name = '', startDate = n
 };
 
 const getAttendanceRecords = async (startDate, endDate) => {
-  console.log(startDate, endDate);
-
   try {
     let startTime, endTime;
 
@@ -371,6 +369,16 @@ const getAttendanceRecords = async (startDate, endDate) => {
               firm_name: true,
             },
           },
+          photos: {
+            select: {
+              url: true,
+            },
+          },
+          pdfs: {
+            select: {
+              url: true,
+            },
+          },
         },
         where: {
           NOT: {
@@ -396,6 +404,16 @@ const getAttendanceRecords = async (startDate, endDate) => {
               },
             },
           },
+          photos: {
+            select: {
+              url: true,
+            },
+          },
+          pdfs: {
+            select: {
+              url: true,
+            },
+          },
         },
         where: {
           NOT: {
@@ -415,6 +433,8 @@ const getAttendanceRecords = async (startDate, endDate) => {
           id: contractor.id,
           firm_name: contractor.firm_name,
         },
+        photos: contractor.photos,
+        pdfs: contractor.pdfs,
         type: 'CONTRACTOR',
       })),
     ].map((emp) => ({
@@ -446,18 +466,61 @@ const getAttendanceRecords = async (startDate, endDate) => {
     }
 
     const filteredInfoList = (cameraResponse.data?.AcsEvent?.InfoList || []).filter((record) => record.employeeNoString);
+
     const presentEmployees = new Set(filteredInfoList.map((record) => record.employeeNoString));
 
-    const attendanceData = allEmployees.map((employee) => ({
-      id: employee.id,
-      employeeNo: employee.employeeNo,
-      name: employee.user.name,
-      type: employee.type,
-      role: employee.user.role.name,
-      contractor: employee.contractor?.firm_name || null,
-      status: presentEmployees.has(employee.employeeNo) ? 'PRESENT' : 'ABSENT',
-      lastAccess: getLastAccessTime(filteredInfoList, employee.employeeNo),
-    }));
+    const employeeEntriesMap = filteredInfoList.reduce((acc, entry) => {
+      if (!acc[entry.employeeNoString]) {
+        acc[entry.employeeNoString] = [];
+      }
+      acc[entry.employeeNoString].push(entry);
+      return acc;
+    }, {});
+
+    const employeeWorkingHours = Object.keys(employeeEntriesMap).reduce((acc, employeeNoString) => {
+      const entries = employeeEntriesMap[employeeNoString];
+      if (entries.length > 0) {
+        entries.sort((a, b) => new Date(a.time) - new Date(b.time));
+
+        const firstEntry = entries[0];
+        const lastEntry = entries[entries.length - 1];
+
+        const startTime = new Date(firstEntry.time);
+        const endTime = new Date(lastEntry.time);
+        const workingHours = (endTime - startTime) / (1000 * 60 * 60);
+
+        acc[employeeNoString] = {
+          inTime: firstEntry.time,
+          outTime: lastEntry.time,
+          workingHours: workingHours.toFixed(2),
+        };
+      }
+      return acc;
+    }, {});
+
+    const attendanceData = allEmployees.map((employee) => {
+      const workingHoursData = employeeWorkingHours[employee.employeeNo] || {
+        inTime: null,
+        outTime: null,
+        workingHours: 0,
+      };
+
+      return {
+        id: employee.id,
+        employeeNo: employee.employeeNo,
+        name: employee.user.name,
+        type: employee.type,
+        role: employee.user.role.name,
+        contractor: employee.contractor?.firm_name || null,
+        status: presentEmployees.has(employee.employeeNo) ? 'PRESENT' : 'ABSENT',
+        lastAccess: getLastAccessTime(filteredInfoList, employee.employeeNo),
+        photos: employee.photos,
+        pdfs: employee.pdfs,
+        inTime: workingHoursData.inTime,
+        outTime: workingHoursData.outTime,
+        workingHours: workingHoursData.workingHours,
+      };
+    });
 
     const sortedAttendance = attendanceData.sort((a, b) => a.name.localeCompare(b.name));
     const presentCount = sortedAttendance.filter((emp) => emp.status === 'PRESENT').length;
@@ -489,7 +552,6 @@ const getAttendanceRecords = async (startDate, endDate) => {
     );
   }
 };
-
 const getLastAccessTime = (infoList, employeeNo) => {
   const employeeRecords = infoList.filter((record) => record.employeeNoString === employeeNo);
   if (employeeRecords.length === 0) return null;

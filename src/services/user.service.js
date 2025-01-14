@@ -202,6 +202,12 @@ const fetchUsersHandler = async (filters = {}) => {
               url: true,
             },
           },
+          pdfs: {
+            select: {
+              id: true,
+              url: true,
+            },
+          },
           manager: {
             select: {
               id: true,
@@ -225,6 +231,12 @@ const fetchUsersHandler = async (filters = {}) => {
           contractorId: true,
           fingerprint_data: true,
           photos: {
+            select: {
+              id: true,
+              url: true,
+            },
+          },
+          pdfs: {
             select: {
               id: true,
               url: true,
