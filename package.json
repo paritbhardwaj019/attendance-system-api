@@ -29,7 +29,8 @@
     "seed:roles": "node src/scripts/seedRoles.js",
     "seed:database": "node src/scripts/seedDatabase.js",
     "db:auto": "node src/scripts/automateDatabase.js",
-    "seed:codes": "node src/utils/initializeDefaultCodes.js"
+    "seed:codes": "node src/utils/initializeDefaultCodes.js",
+    "seed:labour": "node src/scripts/seedLabour.js"
   },
   "keywords": [
     "node",

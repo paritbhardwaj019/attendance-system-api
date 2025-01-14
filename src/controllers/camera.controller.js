@@ -37,6 +37,24 @@ const searchUser = catchAsync(async (req, res) => {
   );
 });
 
+const getAttendance = catchAsync(async (req, res) => {
+  const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
+  const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
+
+  const attendanceResults = await cameraService.getAttendanceRecords(startDate, endDate);
+
+  res.status(httpStatus.OK).json(
+    ApiResponse.success(httpStatus.OK, 'Attendance records retrieved successfully', {
+      results: attendanceResults.data.results,
+      summary: attendanceResults.data.summary,
+      metadata: {
+        dateRange: attendanceResults.metadata.dateRange,
+      },
+    })
+  );
+});
+
 module.exports = {
   searchUser,
+  getAttendance,
 };

@@ -6,7 +6,6 @@ const config = require('../config/config');
 const db = require('../database/prisma');
 const fs = require('fs');
 const path = require('path');
-const axios = require('axios');
 
 const BASE_URL = 'http://43.224.222.244:85';
 const DEV_INDEX = '20F57640-5C66-49B3-86D5-750E856BEA4A';
@@ -43,10 +42,6 @@ const addUserToCamera = async (id, name) => {
       },
     });
 
-    console.log(id);
-
-    console.log('HERE', 'user is here', response.data);
-
     if (response.status !== 200) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to add user to camera system');
     }
@@ -78,17 +73,6 @@ const addFacePicturesToCamera = async (id, photo) => {
     data.append('FaceDataRecord', fs.createReadStream(photo.path), {
       filename: path.basename(photo.path),
       contentType: 'image/jpeg',
-    });
-
-    console.log('FormData:', {
-      data: JSON.stringify({ FaceInfo: { employeeNo: id } }),
-      FaceDataRecord: {
-        value: fs.createReadStream(photo.path),
-        options: {
-          filename: path.basename(photo.path),
-          contentType: 'image/jpeg',
-        },
-      },
     });
 
     const headers = {
@@ -291,9 +275,6 @@ const searchUserInCamera = async (page = 1, limit = 10, name = '', startDate = n
       }),
     ]);
 
-    console.log('CONTRACTORS', contractors);
-    console.log('LABOURS', labours);
-
     const dbEmployeeNos = new Set([...contractors.map((c) => c.employeeNo), ...labours.map((l) => l.employeeNo)]);
 
     if (response.status !== 200) {
@@ -302,7 +283,8 @@ const searchUserInCamera = async (page = 1, limit = 10, name = '', startDate = n
 
     let filteredUsers = response.data.UserInfoSearch.UserInfo.filter((user) => dbEmployeeNos.has(user.employeeNo));
 
-    // Filter by name if provided
+    console.log(response.data);
+
     if (name) {
       const searchTerm = name.toLowerCase();
       filteredUsers = filteredUsers.filter(
@@ -310,7 +292,6 @@ const searchUserInCamera = async (page = 1, limit = 10, name = '', startDate = n
       );
     }
 
-    // Filter by date range
     const startTimestamp = startDate.getTime();
     const endTimestamp = endDate.getTime();
     filteredUsers = filteredUsers.filter((user) => {
@@ -319,13 +300,10 @@ const searchUserInCamera = async (page = 1, limit = 10, name = '', startDate = n
       return validBeginTime <= endTimestamp && validEndTime >= startTimestamp;
     });
 
-    // Apply pagination
     const startIndex = (page - 1) * limit;
     const paginatedUsers = filteredUsers.slice(startIndex, startIndex + limit);
 
-    // Group attendance data by date
     const attendanceByDate = paginatedUsers.reduce((acc, user) => {
-      // Using the validBeginTime as the attendance date
       const attendanceDate = new Date(user.Valid.beginTime).toISOString().split('T')[0];
       if (!acc[attendanceDate]) {
         acc[attendanceDate] = [];
@@ -351,6 +329,196 @@ const searchUserInCamera = async (page = 1, limit = 10, name = '', startDate = n
   }
 };
 
+const getAttendanceRecords = async (startDate, endDate) => {
+  console.log(startDate, endDate);
+
+  try {
+    let startTime, endTime;
+
+    if (!startDate || !endDate) {
+      const todayRange = getTodayDateRange();
+      startTime = todayRange.startDate;
+      endTime = todayRange.endDate;
+    } else {
+      const formattedStartDate = formatDateForCamera(startDate);
+      const formattedEndDate = formatDateForCamera(endDate);
+
+      startTime = typeof formattedStartDate === 'object' ? formattedStartDate.startTime : formattedStartDate;
+      endTime = typeof formattedEndDate === 'object' ? formattedEndDate.endTime : formattedEndDate;
+    }
+
+    const [labours, contractors] = await Promise.all([
+      db.labour.findMany({
+        select: {
+          id: true,
+          employeeNo: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              role: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          contractor: {
+            select: {
+              id: true,
+              firm_name: true,
+            },
+          },
+        },
+        where: {
+          NOT: {
+            employeeNo: '',
+          },
+        },
+      }),
+      db.contractor.findMany({
+        select: {
+          id: true,
+          employeeNo: true,
+          firm_name: true,
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              role: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+        where: {
+          NOT: {
+            employeeNo: '',
+          },
+        },
+      }),
+    ]);
+
+    const allEmployees = [
+      ...labours,
+      ...contractors.map((contractor) => ({
+        id: contractor.id,
+        employeeNo: contractor.employeeNo,
+        user: contractor.user,
+        contractor: {
+          id: contractor.id,
+          firm_name: contractor.firm_name,
+        },
+        type: 'CONTRACTOR',
+      })),
+    ].map((emp) => ({
+      ...emp,
+      type: emp.type || 'LABOUR',
+    }));
+
+    const cameraApiBody = {
+      AcsEventCond: {
+        searchID: Math.random().toString(36).substring(2, 15),
+        searchResultPosition: 0,
+        maxResults: 500,
+        startTime: startTime,
+        endTime: endTime,
+      },
+    };
+
+    const cameraResponse = await digestAuth.request({
+      method: 'POST',
+      url: `${BASE_URL}/ISAPI/AccessControl/AcsEvent?format=json&devIndex=${DEV_INDEX}`,
+      data: cameraApiBody,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (cameraResponse.status !== 200) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to fetch attendance from camera system');
+    }
+
+    const filteredInfoList = (cameraResponse.data?.AcsEvent?.InfoList || []).filter((record) => record.employeeNoString);
+    const presentEmployees = new Set(filteredInfoList.map((record) => record.employeeNoString));
+
+    const attendanceData = allEmployees.map((employee) => ({
+      id: employee.id,
+      employeeNo: employee.employeeNo,
+      name: employee.user.name,
+      type: employee.type,
+      role: employee.user.role.name,
+      contractor: employee.contractor?.firm_name || null,
+      status: presentEmployees.has(employee.employeeNo) ? 'PRESENT' : 'ABSENT',
+      lastAccess: getLastAccessTime(filteredInfoList, employee.employeeNo),
+    }));
+
+    const sortedAttendance = attendanceData.sort((a, b) => a.name.localeCompare(b.name));
+    const presentCount = sortedAttendance.filter((emp) => emp.status === 'PRESENT').length;
+    const absentCount = sortedAttendance.filter((emp) => emp.status === 'ABSENT').length;
+    const totalEmployees = sortedAttendance.length;
+
+    return {
+      success: true,
+      data: {
+        results: sortedAttendance,
+        summary: {
+          total_present: presentCount,
+          total_absent: absentCount,
+          total_employees: totalEmployees,
+        },
+      },
+      metadata: {
+        dateRange: {
+          startTime,
+          endTime,
+        },
+      },
+    };
+  } catch (error) {
+    console.error('Error fetching attendance records:', error);
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      'Failed to fetch attendance records: ' + (error.response?.data?.message || error.message)
+    );
+  }
+};
+
+const getLastAccessTime = (infoList, employeeNo) => {
+  const employeeRecords = infoList.filter((record) => record.employeeNoString === employeeNo);
+  if (employeeRecords.length === 0) return null;
+
+  return new Date(Math.max(...employeeRecords.map((record) => new Date(record.time).getTime())));
+};
+
+const getTodayDateRange = () => {
+  const today = new Date().toISOString().split('T')[0];
+  return {
+    startDate: `${today}T00:01:04+05:30`,
+    endDate: `${today}T23:59:04+05:30`,
+  };
+};
+
+const formatDateForCamera = (date) => {
+  const formattedDate = new Date(date).toISOString().split('T')[0];
+  const hours = new Date(date).getUTCHours();
+
+  if (hours === 0) {
+    return {
+      startTime: `${formattedDate}T00:01:04+05:30`,
+      endTime: `${formattedDate}T23:59:04+05:30`,
+    };
+  }
+
+  return new Date(date).toISOString().replace('Z', '+05:30');
+};
+
 const cameraService = {
   addFacePicturesToCamera,
   deleteUserFromCamera,
@@ -358,6 +526,7 @@ const cameraService = {
   deleteFacePictureFromCamera,
   addUserToCamera,
   searchUserInCamera,
+  getAttendanceRecords,
 };
 
 module.exports = cameraService;
