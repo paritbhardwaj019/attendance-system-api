@@ -172,15 +172,15 @@ const addContractorHandler = async (loggedInUser, contractorData, files) => {
 
       await cameraService.addUserToCamera(employeeNo, user.name);
 
-      // if (files && files.photos && files.photos.length > 0) {
-      //   try {
-      //     const photoFile = files.photos[0];
+      if (files && files.photos && files.photos.length > 0) {
+        try {
+          const photoFile = files.photos[0];
 
-      //     await cameraService.addFacePicturesToCamera(employeeNo, photoFile);
-      //   } catch (error) {
-      //     throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to add face picture to camera system: ' + error.message);
-      //   }
-      // }
+          await cameraService.addFacePicturesToCamera(employeeNo, photoFile);
+        } catch (error) {
+          throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to add face picture to camera system: ' + error.message);
+        }
+      }
 
       return contractorRecord;
     },

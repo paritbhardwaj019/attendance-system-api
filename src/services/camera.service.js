@@ -1,11 +1,11 @@
 const httpStatus = require('http-status');
-const FormData = require('form-data');
 const AxiosDigestAuth = require('@mhoc/axios-digest-auth').default;
 const ApiError = require('../utils/ApiError');
 const config = require('../config/config');
 const db = require('../database/prisma');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
 
 const BASE_URL = 'http://43.224.222.244:85';
 const DEV_INDEX = '20F57640-5C66-49B3-86D5-750E856BEA4A';
@@ -59,68 +59,38 @@ const addUserToCamera = async (id, name) => {
 const addFacePicturesToCamera = async (id, photo) => {
   try {
     if (!fs.existsSync(photo.path)) {
-      throw new Error('Photo file does not exist at path: ' + photo.path);
+      throw new ApiError(400, 'Photo file does not exist at path: ' + photo.path);
     }
 
-    const boundary = '----WebKitFormBoundary8qzjjWmAt8tSxqen';
+    const pythonScriptPath = path.resolve(__dirname, '../scripts/add_face.py');
 
-    let data = new FormData();
+    const command = `python ${pythonScriptPath} ${id} ${photo.path}`;
 
-    data.append('data', JSON.stringify({ FaceInfo: { employeeNo: id } }), {
-      contentType: 'application/json',
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        throw new ApiError(500, 'Failed to add face picture to camera system: ' + error.message);
+      }
+
+      if (stderr) {
+        throw new ApiError(500, 'Failed to add face picture to camera system: ' + stderr);
+      }
+
+      fs.unlinkSync(photo.path);
+
+      return stdout;
     });
-
-    data.append('FaceDataRecord', fs.createReadStream(photo.path), {
-      filename: path.basename(photo.path),
-      contentType: 'image/jpeg',
-    });
-
-    const headers = {
-      ...data.getHeaders(),
-      'Content-Type': `multipart/form-data; boundary=${boundary}`,
-      Accept: '*/*',
-      Host: '43.224.222.244:85',
-      'If-Modified-Since': '0',
-      'Accept-Encoding': 'gzip, deflate',
-      'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7',
-      'Cache-Control': 'max-age=0',
-      Connection: 'keep-alive',
-      Origin: 'http://43.224.222.244:85',
-      Referer: 'http://43.224.222.244:85/',
-      'X-Requested-With': 'XMLHttpRequest',
-      Cookie:
-        'WebSession_d09737e993=6564363563633066393363373064373938383532306366616238326431326565; _dd_s=logs=1&id=b4e87819-96e5-4884-b86b-149fb5ea20f3&created=1736794034152&expire=1736795296044',
-      SessionTag: '8b7438c1654aabfda8e831c8a5fc855fc8a6b9c91cba97f646e1123cf6cf95f3',
-      'User-Agent':
-        'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
-    };
-
-    let config = {
-      method: 'post',
-      maxBodyLength: Infinity,
-      url: `${BASE_URL}/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json&devIndex=${DEV_INDEX}`,
-      headers: headers,
-      data: data,
-      timeout: 30000,
-    };
-
-    const response = await digestAuth.request(config);
-
-    fs.unlinkSync(photo.path);
-
-    if (response.status !== 200) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to add face picture to camera system');
-    }
-
-    return response.data;
   } catch (error) {
     if (photo && photo.path) {
       fs.unlinkSync(photo.path);
     }
-    throw new ApiError(
-      httpStatus.BAD_REQUEST,
-      'Failed to add face picture to camera system: ' + (error.response?.data?.message || error.message)
-    );
+    if (error instanceof ApiError) {
+      throw error;
+    } else {
+      throw new ApiError(
+        500,
+        'Failed to add face picture to camera system: ' + (error.response?.data?.message || error.message)
+      );
+    }
   }
 };
 /**
