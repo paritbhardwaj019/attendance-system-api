@@ -180,12 +180,15 @@ model LabourPDF {
 }
 
 model Attendance {
-  id       Int      @id @default(autoincrement())
-  labour   Labour   @relation(fields: [labourId], references: [id])
-  labourId Int
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            Int       @id @default(autoincrement())
+  labour        Labour    @relation(fields: [labourId], references: [id])
+  labourId      Int
+  inTime        DateTime?
+  outTime       DateTime?
+  workingHours  Float
+  date          DateTime
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model Visitor {

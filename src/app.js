@@ -10,8 +10,11 @@ const morgan = require('./config/morgan');
 const routes = require('./routes/v1');
 const { errorConverter, errorHandler } = require('./middlewares/error');
 const ApiError = require('./utils/ApiError');
+const { initializeAttendanceCron } = require('./services/attendance.service');
 
 const app = express();
+
+initializeAttendanceCron();
 
 if (config.env !== 'test') {
   app.use(morgan.successHandler);
