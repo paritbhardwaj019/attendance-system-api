@@ -323,7 +323,8 @@ const getNextExecutionTime = (cronExpression) => {
 
 const initializeAttendanceCron = () => {
   logger.info('Initializing attendance cron job');
-  const cronExpression = '0 */6 * * *';
+
+  const cronExpression = '0 * * * *';
 
   const job = cron.schedule(cronExpression, async () => {
     const startTime = new Date();
