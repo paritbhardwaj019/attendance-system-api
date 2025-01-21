@@ -1,6 +1,8 @@
 const httpStatus = require('http-status');
 const db = require('../database/prisma');
 const ApiError = require('../utils/ApiError');
+const cameraService = require('./camera.service');
+const { calculateDaysDifference } = require('../utils/dateUtils');
 
 /**
  * Handler to fetch labour attendance report with startDate and endDate filters.
@@ -29,51 +31,144 @@ const fetchLabourReportHandler = async (filters = {}) => {
   const skip = (page - 1) * limit;
   const take = limit;
 
-  const whereClause = {
-    labourId: labourId ? parseInt(labourId, 10) : undefined,
-    labour: contractorId ? { contractorId: parseInt(contractorId, 10) } : undefined,
-    date: {
-      gte: startDate ? new Date(startDate) : undefined,
-      lte: endDate ? new Date(endDate) : undefined,
-    },
-  };
+  const today = new Date().toISOString().split('T')[0];
+  const formattedStartDate = startDate ? new Date(startDate).toISOString().split('T')[0] : today;
+  const formattedEndDate = endDate ? new Date(endDate).toISOString().split('T')[0] : today;
 
-  const attendanceRecords = await db.attendance.findMany({
-    where: whereClause,
-    include: {
-      labour: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-              mobile_number: true,
+  const daysDifference = calculateDaysDifference(formattedStartDate, formattedEndDate);
+
+  let attendanceRecords;
+
+  if (daysDifference < 1) {
+    const cameraResponse = await cameraService.getAttendanceRecords(formattedStartDate, formattedEndDate);
+
+    attendanceRecords = [];
+    for (const date in cameraResponse.data.results) {
+      const recordsForDate = cameraResponse.data.results[date];
+      for (const record of recordsForDate) {
+        attendanceRecords.push({
+          labourId: record.id,
+          inTime: record.inTime,
+          outTime: record.outTime,
+          workingHours: parseFloat(record.workingHours || 0),
+          date: new Date(date),
+          labour: {
+            user: {
+              name: record.name,
+              username: record.employeeNo,
             },
+            contractor: {
+              firm_name: record.contractor,
+              employeeNo: record.employeeNo,
+            },
+            employeeNo: record.employeeNo,
           },
-          contractor: {
-            select: {
-              id: true,
-              firm_name: true,
-              employeeNo: true,
+        });
+      }
+    }
+  } else {
+    const whereClause = {
+      labourId: labourId ? parseInt(labourId, 10) : undefined,
+      labour: contractorId ? { contractorId: parseInt(contractorId, 10) } : undefined,
+      date: {
+        gte: formattedStartDate ? new Date(formattedStartDate) : undefined,
+        lte: formattedEndDate ? new Date(formattedEndDate) : undefined,
+      },
+    };
+
+    attendanceRecords = await db.attendance.findMany({
+      where: whereClause,
+      include: {
+        labour: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                username: true,
+                mobile_number: true,
+              },
+            },
+            contractor: {
+              select: {
+                id: true,
+                firm_name: true,
+                employeeNo: true,
+              },
             },
           },
         },
       },
-    },
-    orderBy: {
-      [sortField]: sortOrder,
-    },
-    skip: skip,
-    take: take,
-  });
+      orderBy: {
+        [sortField]: sortOrder,
+      },
+      skip: skip,
+      take: take,
+    });
+  }
+
+  const uniqueRecords = [];
+  const seenLabourIds = new Set();
+
+  let totalWorkingHours = 0;
+  let totalRecordsCount = 0;
+
+  for (const record of attendanceRecords) {
+    if (!seenLabourIds.has(record.labourId)) {
+      seenLabourIds.add(record.labourId);
+
+      const flattenedRecord = {
+        id: record.labourId,
+        inTime: record.inTime,
+        outTime: record.outTime,
+        workingHours: record.workingHours,
+        date: record.date,
+        name: record.labour.user.name,
+        username: record.labour.user.username,
+        mobile_number: record.labour.user.mobile_number,
+        firm_name: record.labour.contractor.firm_name,
+        employeeNo: record.labour.employeeNo,
+      };
+
+      uniqueRecords.push(flattenedRecord);
+
+      totalWorkingHours += record.workingHours || 0;
+      totalRecordsCount += 1;
+    }
+  }
 
   const totalRecords = await db.attendance.count({
-    where: whereClause,
+    where: {
+      labourId: labourId ? parseInt(labourId, 10) : undefined,
+      labour: contractorId ? { contractorId: parseInt(contractorId, 10) } : undefined,
+      date: {
+        gte: formattedStartDate ? new Date(formattedStartDate) : undefined,
+        lte: formattedEndDate ? new Date(formattedEndDate) : undefined,
+      },
+    },
   });
 
+  const summary = {
+    totalWorkingHours: parseFloat(totalWorkingHours.toFixed(2)),
+    totalRecords: totalRecordsCount,
+  };
+
+  const columns = [
+    { field: 'id', headerName: 'ID', width: 100 },
+    { field: 'name', headerName: 'Name', width: 150 },
+    { field: 'username', headerName: 'Username', width: 150 },
+    { field: 'firm_name', headerName: 'Firm Name', width: 150 },
+    { field: 'employeeNo', headerName: 'Employee No', width: 150 },
+    { field: 'inTime', headerName: 'In Time', width: 150 },
+    { field: 'outTime', headerName: 'Out Time', width: 150 },
+    { field: 'workingHours', headerName: 'Working Hours', width: 150 },
+    { field: 'date', headerName: 'Date', width: 150 },
+  ];
+
   return {
-    data: attendanceRecords,
+    data: uniqueRecords,
+    summary,
+    columns,
     pagination: {
       total: totalRecords,
       page: page,
@@ -94,56 +189,125 @@ const fetchLabourReportHandler = async (filters = {}) => {
 const fetchLabourReportByIdHandler = async (labourId, filters = {}) => {
   const { startDate, endDate } = filters;
 
-  console.log('LABOUR ID', labourId);
-  console.log('FILTERS', filters);
+  const today = new Date().toISOString().split('T')[0];
+  const formattedStartDate = startDate ? new Date(startDate).toISOString().split('T')[0] : today;
+  const formattedEndDate = endDate ? new Date(endDate).toISOString().split('T')[0] : today;
 
-  const whereClause = {
-    labourId: parseInt(labourId, 10),
-    date: {
-      gte: startDate ? new Date(startDate) : undefined,
-      lte: endDate ? new Date(endDate) : undefined,
-    },
-  };
+  const daysDifference = calculateDaysDifference(formattedStartDate, formattedEndDate);
 
-  console.log('ALL ATTENDANCE', await db.attendance.findMany());
+  let attendanceRecords;
 
-  const attendanceRecords = await db.attendance.findMany({
-    where: whereClause,
-    include: {
-      labour: {
-        include: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-              mobile_number: true,
+  if (daysDifference < 1) {
+    const cameraResponse = await cameraService.getAttendanceRecords(formattedStartDate, formattedEndDate);
+
+    const labour = await db.labour.findUnique({
+      where: { id: parseInt(labourId, 10) },
+      select: { employeeNo: true },
+    });
+
+    if (!labour) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Labour not found');
+    }
+
+    attendanceRecords = [];
+    for (const date in cameraResponse.data.results) {
+      const recordsForDate = cameraResponse.data.results[date];
+      for (const record of recordsForDate) {
+        if (record.employeeNo === labour.employeeNo) {
+          attendanceRecords.push({
+            labourId: parseInt(labourId, 10),
+            inTime: record.inTime,
+            outTime: record.outTime,
+            workingHours: parseFloat(record.workingHours || 0),
+            date: new Date(date),
+            labour: {
+              user: {
+                name: record.name,
+                username: record.employeeNo,
+              },
+              contractor: {
+                firm_name: record.contractor,
+                employeeNo: record.employeeNo,
+              },
+              employeeNo: record.employeeNo,
             },
-          },
-          contractor: {
-            select: {
-              id: true,
-              firm_name: true,
-              employeeNo: true,
+          });
+        }
+      }
+    }
+  } else {
+    const whereClause = {
+      labourId: parseInt(labourId, 10),
+      date: {
+        gte: formattedStartDate ? new Date(formattedStartDate) : undefined,
+        lte: formattedEndDate ? new Date(formattedEndDate) : undefined,
+      },
+    };
+
+    attendanceRecords = await db.attendance.findMany({
+      where: whereClause,
+      include: {
+        labour: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                username: true,
+                mobile_number: true,
+              },
+            },
+            contractor: {
+              select: {
+                id: true,
+                firm_name: true,
+                employeeNo: true,
+              },
             },
           },
         },
       },
-    },
-    orderBy: {
-      date: 'asc',
-    },
-  });
+      orderBy: {
+        date: 'asc',
+      },
+    });
+  }
 
   if (!attendanceRecords || attendanceRecords.length === 0) {
     throw new ApiError(httpStatus.NOT_FOUND, 'No attendance records found for the specified labour');
   }
 
+  let totalWorkingHours = 0;
+  let totalRecordsCount = 0;
+
+  for (const record of attendanceRecords) {
+    totalWorkingHours += record.workingHours || 0;
+    totalRecordsCount += 1;
+  }
+
+  const summary = {
+    totalWorkingHours: parseFloat(totalWorkingHours.toFixed(2)),
+    totalRecords: totalRecordsCount,
+  };
+
+  const columns = [
+    { field: 'id', headerName: 'ID', width: 100 },
+    { field: 'name', headerName: 'Name', width: 150 },
+    { field: 'username', headerName: 'Username', width: 150 },
+    { field: 'firm_name', headerName: 'Firm Name', width: 150 },
+    { field: 'employeeNo', headerName: 'Employee No', width: 150 },
+    { field: 'inTime', headerName: 'In Time', width: 150 },
+    { field: 'outTime', headerName: 'Out Time', width: 150 },
+    { field: 'workingHours', headerName: 'Working Hours', width: 150 },
+    { field: 'date', headerName: 'Date', width: 150 },
+  ];
+
   return {
     data: attendanceRecords,
+    summary,
+    columns,
   };
 };
-
 /**
  * Handler to fetch contractor-wise labour working hours report.
  * @param {Object} filters - Filters for fetching the report.
@@ -154,46 +318,113 @@ const fetchLabourReportByIdHandler = async (labourId, filters = {}) => {
 const fetchContractorLabourReportHandler = async (filters = {}) => {
   const { startDate, endDate } = filters;
 
-  const contractors = await db.contractor.findMany({
-    include: {
-      labour: {
-        include: {
-          attendance: {
-            where: {
-              date: {
-                gte: startDate ? new Date(startDate) : undefined,
-                lte: endDate ? new Date(endDate) : undefined,
+  const today = new Date().toISOString().split('T')[0];
+  const formattedStartDate = startDate ? new Date(startDate).toISOString().split('T')[0] : today;
+  const formattedEndDate = endDate ? new Date(endDate).toISOString().split('T')[0] : today;
+
+  const daysDifference = calculateDaysDifference(formattedStartDate, formattedEndDate);
+
+  let contractorReports;
+
+  if (daysDifference < 1) {
+    const cameraResponse = await cameraService.getAttendanceRecords(formattedStartDate, formattedEndDate);
+
+    const contractors = await db.contractor.findMany({
+      include: {
+        labour: {
+          select: {
+            id: true,
+            employeeNo: true,
+          },
+        },
+      },
+    });
+
+    contractorReports = contractors.map((contractor) => {
+      let totalWorkingHours = 0;
+
+      for (const date in cameraResponse.data.results) {
+        const recordsForDate = cameraResponse.data.results[date];
+        for (const record of recordsForDate) {
+          if (contractor.labour.some((labour) => labour.employeeNo === record.employeeNo)) {
+            totalWorkingHours += parseFloat(record.workingHours || 0);
+          }
+        }
+      }
+
+      return {
+        contractorId: contractor.id,
+        firmName: contractor.firm_name,
+        employeeNo: contractor.employeeNo,
+        totalWorkingHours,
+        labourCount: contractor.labour.length,
+      };
+    });
+  } else {
+    const contractors = await db.contractor.findMany({
+      include: {
+        labour: {
+          include: {
+            attendance: {
+              where: {
+                date: {
+                  gte: formattedStartDate ? new Date(formattedStartDate) : undefined,
+                  lte: formattedEndDate ? new Date(formattedEndDate) : undefined,
+                },
               },
-            },
-            select: {
-              workingHours: true,
+              select: {
+                workingHours: true,
+              },
             },
           },
         },
       },
-    },
-  });
-
-  const contractorReports = contractors.map((contractor) => {
-    let totalWorkingHours = 0;
-
-    contractor.labour.forEach((labour) => {
-      labour.attendance.forEach((attendance) => {
-        totalWorkingHours += attendance.workingHours || 0;
-      });
     });
 
-    return {
-      contractorId: contractor.id,
-      firmName: contractor.firm_name,
-      employeeNo: contractor.employeeNo,
-      totalWorkingHours,
-      labourCount: contractor.labour.length,
-    };
+    contractorReports = contractors.map((contractor) => {
+      let totalWorkingHours = 0;
+
+      contractor.labour.forEach((labour) => {
+        labour.attendance.forEach((attendance) => {
+          totalWorkingHours += attendance.workingHours || 0;
+        });
+      });
+
+      return {
+        contractorId: contractor.id,
+        firmName: contractor.firm_name,
+        employeeNo: contractor.employeeNo,
+        totalWorkingHours,
+        labourCount: contractor.labour.length,
+      };
+    });
+  }
+
+  let totalWorkingHours = 0;
+  let totalLabourCount = 0;
+
+  contractorReports.forEach((contractor) => {
+    totalWorkingHours += contractor.totalWorkingHours || 0;
+    totalLabourCount += contractor.labourCount || 0;
   });
+
+  const summary = {
+    totalWorkingHours: parseFloat(totalWorkingHours.toFixed(2)),
+    totalLabourCount,
+  };
+
+  const columns = [
+    { field: 'contractorId', headerName: 'Contractor ID', width: 150 },
+    { field: 'firmName', headerName: 'Firm Name', width: 200 },
+    { field: 'employeeNo', headerName: 'Employee No', width: 150 },
+    { field: 'totalWorkingHours', headerName: 'Total Working Hours', width: 150 },
+    { field: 'labourCount', headerName: 'Labour Count', width: 150 },
+  ];
 
   return {
     data: contractorReports,
+    summary,
+    columns,
   };
 };
 

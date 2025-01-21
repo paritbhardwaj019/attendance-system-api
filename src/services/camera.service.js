@@ -253,8 +253,6 @@ const searchUserInCamera = async (page = 1, limit = 10, name = '', startDate = n
 
     let filteredUsers = response.data.UserInfoSearch.UserInfo.filter((user) => dbEmployeeNos.has(user.employeeNo));
 
-    console.log(response.data);
-
     if (name) {
       const searchTerm = name.toLowerCase();
       filteredUsers = filteredUsers.filter(
@@ -404,6 +402,8 @@ const getAttendanceRecords = async (startDate, endDate) => {
       type: emp.type || 'LABOUR',
     }));
 
+    console.log(startTime, endTime);
+
     const cameraApiBody = {
       AcsEventCond: {
         searchID: Math.random().toString(36).substring(2, 15),
@@ -426,6 +426,10 @@ const getAttendanceRecords = async (startDate, endDate) => {
     }
 
     const filteredInfoList = (cameraResponse.data?.AcsEvent?.InfoList || []).filter((record) => record.employeeNoString);
+
+    console.log('FILTERD INFOR LIST', filteredInfoList);
+
+    console.log('LABOURS', await db.labour.findMany());
 
     const employeeEntriesByDate = filteredInfoList.reduce((acc, entry) => {
       const date = new Date(entry.time).toISOString().split('T')[0];
@@ -490,30 +494,14 @@ const getAttendanceRecords = async (startDate, endDate) => {
       return acc;
     }, {});
 
-    if (daysDifference <= 1) {
-      const date = Object.keys(attendanceByDate)[0];
-      return {
-        success: true,
-        data: {
-          results: attendanceByDate[date] || [],
-          summary: summary[date] || {
-            total_present: 0,
-            total_absent: 0,
-            total_employees: 0,
-          },
-        },
-        metadata: { dateRange: { startTime, endTime } },
-      };
-    } else {
-      return {
-        success: true,
-        data: {
-          results: attendanceByDate,
-          summary,
-        },
-        metadata: { dateRange: { startTime, endTime } },
-      };
-    }
+    return {
+      success: true,
+      data: {
+        results: attendanceByDate,
+        summary,
+      },
+      metadata: { dateRange: { startTime, endTime } },
+    };
   } catch (error) {
     console.error('Error fetching attendance records:', error);
     throw new ApiError(

@@ -132,7 +132,7 @@ const createLabours = async (contractorId, laboursData) => {
         },
       });
 
-      const employeeNo = `${contractor.employeeNo}-LABOUR-${user.id}`;
+      const employeeNo = userDetails.username === 'ashish_kumar' ? '1002' : `${contractor.employeeNo}-LABOUR-${user.id}`;
 
       const labour = await db.labour.create({
         data: {
@@ -238,6 +238,16 @@ const seedAll = async () => {
         photos: [],
         pdfs: [],
       },
+      {
+        name: 'Ashish Kumar',
+        username: 'ashish_kumar',
+        password: 'password123',
+        mobile_number: '555555555512321',
+        aadhar_number: '555555555555123',
+        fingerprint_data: 'fingerprint6',
+        photos: [],
+        pdfs: [],
+      },
     ]);
 
     console.log('Seeding completed successfully.');
@@ -248,7 +258,7 @@ const seedAll = async () => {
   }
 };
 
-// seedAll();
+seedAll();
 
 module.exports = {
   getAttendanceRecords,

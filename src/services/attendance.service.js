@@ -4,7 +4,7 @@ const ApiError = require('../utils/ApiError');
 const cron = require('node-cron');
 const logger = require('../config/logger');
 const cameraService = require('./camera.service');
-const { getAttendanceRecords } = require('../data/seedData');
+// const { getAttendanceRecords } = require('../data/seedData');
 
 /**
  * Record attendance for a labour member
@@ -188,54 +188,55 @@ const getAttendanceRecordsForManagerAndContractors = async (labourId, startDate,
 
 const fetchAndStoreAttendance = async () => {
   try {
-    const now = new Date();
-    const todayStart = new Date(now.setHours(0, 0, 0, 0));
-    const todayEnd = new Date(now.setHours(23, 59, 59, 999));
+    const todayStart = new Date().toISOString().split('T')[0];
+    const todayEnd = new Date().toISOString().split('T')[0];
 
-    const attendanceData = await getAttendanceRecords(todayStart, todayEnd);
+    const attendanceData = await cameraService.getAttendanceRecords(todayStart, todayEnd);
 
-    console.log('ATTENDANCE DATA', attendanceData);
+    const recordsByDate = attendanceData.data.results;
 
-    const records = attendanceData.data.results;
+    console.log('recordsByDate', recordsByDate);
 
-    console.log('RECORDS', records);
+    for (const date in recordsByDate) {
+      const records = typeof recordsByDate[date] !== 'object' ? [] : recordsByDate[date];
 
-    console.log('ALL LABOURS', await db.labour.findMany());
+      for (const record of records) {
+        const labour = await db.labour.findUnique({
+          where: { employeeNo: record.employeeNo },
+        });
 
-    for (const record of records) {
-      const labour = await db.labour.findUnique({
-        where: { employeeNo: record.employeeNo },
-      });
+        if (!labour) {
+          console.error(`Labour with employeeNo ${record.employeeNo} not found.`);
+          continue;
+        }
 
-      if (!labour) {
-        console.error(`Labour with employeeNo ${record.employeeNo} not found.`);
-        continue;
-      }
+        const recordDate = new Date(date);
 
-      await db.attendance.upsert({
-        where: {
-          labourId_date: {
-            labourId: labour.id,
-            date: todayStart,
-          },
-        },
-        update: {
-          inTime: record.inTime ? new Date(record.inTime) : null,
-          outTime: record.outTime ? new Date(record.outTime) : null,
-          workingHours: parseFloat(record.workingHours),
-        },
-        create: {
-          labour: {
-            connect: {
-              id: labour.id,
+        await db.attendance.upsert({
+          where: {
+            labourId_date: {
+              labourId: labour.id,
+              date: recordDate,
             },
           },
-          inTime: record.inTime ? new Date(record.inTime) : null,
-          outTime: record.outTime ? new Date(record.outTime) : null,
-          workingHours: parseFloat(record.workingHours),
-          date: todayStart,
-        },
-      });
+          update: {
+            inTime: record.inTime ? record.inTime : null,
+            outTime: record.outTime ? record.outTime : null,
+            workingHours: parseFloat(record.workingHours),
+          },
+          create: {
+            labour: {
+              connect: {
+                id: labour.id,
+              },
+            },
+            inTime: record.inTime ? new Date(record.inTime) : null,
+            outTime: record.outTime ? new Date(record.outTime) : null,
+            workingHours: parseFloat(record.workingHours),
+            date: recordDate,
+          },
+        });
+      }
     }
 
     return {

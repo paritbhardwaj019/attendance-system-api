@@ -49,7 +49,7 @@ const fetchLabourReport = async (filters = {}) => {
       params: filters,
     });
 
-    console.log('Labour Report:', response.data.data.data);
+    console.log('Labour Report:', response.data);
   } catch (error) {
     console.error('Error fetching labour report:', error.response ? error.response.data : error.message);
   }
@@ -76,7 +76,7 @@ const fetchLabourReportById = async (labourId, filters = {}) => {
       params: filters,
     });
 
-    console.log('Detailed Labour Report:', response.data);
+    console.log('Detailed Labour Report:', response.data.data.data);
   } catch (error) {
     console.error('Error fetching detailed labour report:', error.response ? error.response.data : error.message);
   }
@@ -121,7 +121,7 @@ const fetchContractorLabourReport = async (filters = {}) => {
     limit: 10,
   });
 
-  await fetchLabourReportById(1, {
+  await fetchLabourReportById(6, {
     // startDate: '2023-10-01',
     // endDate: '2023-10-31',
   });
