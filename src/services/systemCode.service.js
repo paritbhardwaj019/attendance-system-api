@@ -26,7 +26,7 @@ const getNextCode = async (moduleType) => {
     return updated;
   });
 
-  const formattedNumber = String(systemCode.lastNumber).padStart(6, '0');
+  const formattedNumber = String(systemCode.lastNumber).padStart(2, '0');
   return `${systemCode.prefix}${formattedNumber}`;
 };
 
