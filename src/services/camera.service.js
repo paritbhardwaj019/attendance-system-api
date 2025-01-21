@@ -64,7 +64,7 @@ const addFacePicturesToCamera = async (id, photo) => {
 
     const pythonScriptPath = path.resolve(__dirname, '../scripts/add_face.py');
 
-    const command = `python ${pythonScriptPath} ${id} ${photo.path}`;
+    const command = `python3 ${pythonScriptPath} ${id} ${photo.path}`;
 
     exec(command, (error, stdout, stderr) => {
       if (error) {

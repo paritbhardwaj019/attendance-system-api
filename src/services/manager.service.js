@@ -307,20 +307,10 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
 
   let contractor = null;
 
-  console.log('---CONTRACTOR-ID---', contractorId);
-
   if (contractorId) {
-    const newContractorId = await db.user.findUnique({
-      where: {
-        id: contractorId,
-      },
-    });
-
     contractor = await db.contractor.findFirst({
       where: {
-        user: {
-          id: newContractorId.id,
-        },
+        id: contractorId,
       },
     });
 
@@ -328,8 +318,6 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
       throw new ApiError(httpStatus.NOT_FOUND, 'Contractor not found or access denied');
     }
   }
-
-  console.log('---CONTRACTOR---', contractor);
 
   const [photoUrls, pdfUrls] = await Promise.all([
     uploadMultipleFilesToS3(files.photos, 'labour-photos'),
