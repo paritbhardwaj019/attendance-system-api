@@ -170,17 +170,17 @@ const addContractorHandler = async (loggedInUser, contractorData, files) => {
         });
       }
 
-      await cameraService.addUserToCamera(employeeNo, user.name);
+      // await cameraService.addUserToCamera(employeeNo, user.name);
 
-      if (files && files.photos && files.photos.length > 0) {
-        try {
-          const photoFile = files.photos[0];
+      // if (files && files.photos && files.photos.length > 0) {
+      //   try {
+      //     const photoFile = files.photos[0];
 
-          await cameraService.addFacePicturesToCamera(employeeNo, photoFile);
-        } catch (error) {
-          throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to add face picture to camera system: ' + error.message);
-        }
-      }
+      //     await cameraService.addFacePicturesToCamera(employeeNo, photoFile);
+      //   } catch (error) {
+      //     throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to add face picture to camera system: ' + error.message);
+      //   }
+      // }
 
       return contractorRecord;
     },
@@ -292,7 +292,7 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
   }
 
   if (labourData.aadhar_number) {
-    const [existingLabour, existingPerson] = await Promise.all([
+    const [existingLabour] = await Promise.all([
       db.labour.findUnique({
         where: {
           aadhar_number: labourData.aadhar_number,
@@ -300,12 +300,15 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
       }),
     ]);
 
-    if (existingLabour || existingPerson) {
+    if (existingLabour) {
       throw new ApiError(httpStatus.CONFLICT, 'Aadhar number already registered');
     }
   }
 
   let contractor = null;
+
+  console.log('---CONTRACTOR-ID---', contractorId);
+
   if (contractorId) {
     const newContractorId = await db.user.findUnique({
       where: {
@@ -325,6 +328,8 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
       throw new ApiError(httpStatus.NOT_FOUND, 'Contractor not found or access denied');
     }
   }
+
+  console.log('---CONTRACTOR---', contractor);
 
   const [photoUrls, pdfUrls] = await Promise.all([
     uploadMultipleFilesToS3(files.photos, 'labour-photos'),
