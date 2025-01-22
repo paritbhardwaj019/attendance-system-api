@@ -297,7 +297,7 @@ const searchUserInCamera = async (page = 1, limit = 10, name = '', startDate = n
   }
 };
 
-const getAttendanceRecords = async (startDate, endDate) => {
+const getAttendanceRecords = async (startDate, endDate, contractorId = null) => {
   try {
     let startTime, endTime;
 
@@ -317,189 +317,199 @@ const getAttendanceRecords = async (startDate, endDate) => {
     const end = new Date(endTime);
     const daysDifference = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
 
-    const [labours, contractors] = await Promise.all([
-      db.labour.findMany({
-        select: {
-          id: true,
-          employeeNo: true,
-          user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-              role: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-          },
-          contractor: {
-            select: {
-              id: true,
-              firm_name: true,
-            },
-          },
-          photos: {
-            select: { url: true },
-          },
-          pdfs: {
-            select: { url: true },
-          },
+    let attendanceData;
+
+    if (daysDifference < 1) {
+      const cameraApiBody = {
+        AcsEventCond: {
+          searchID: Math.random().toString(36).substring(2, 15),
+          searchResultPosition: 0,
+          maxResults: 500,
+          startTime: startTime,
+          endTime: endTime,
         },
-        where: {
-          NOT: { employeeNo: '' },
-        },
-      }),
-      db.contractor.findMany({
-        select: {
-          id: true,
-          employeeNo: true,
-          firm_name: true,
-          user: {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-              role: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-          },
-          photos: {
-            select: { url: true },
-          },
-          pdfs: {
-            select: { url: true },
-          },
-        },
-        where: {
-          NOT: { employeeNo: '' },
-        },
-      }),
-    ]);
+      };
 
-    const allEmployees = [
-      ...labours,
-      ...contractors.map((contractor) => ({
-        id: contractor.id,
-        employeeNo: contractor.employeeNo,
-        user: contractor.user,
-        contractor: {
-          id: contractor.id,
-          firm_name: contractor.firm_name,
-        },
-        photos: contractor.photos,
-        pdfs: contractor.pdfs,
-        type: 'CONTRACTOR',
-      })),
-    ].map((emp) => ({
-      ...emp,
-      type: emp.type || 'LABOUR',
-    }));
+      const cameraResponse = await digestAuth.request({
+        method: 'POST',
+        url: `${BASE_URL}/ISAPI/AccessControl/AcsEvent?format=json&devIndex=${DEV_INDEX}`,
+        data: cameraApiBody,
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-    console.log(startTime, endTime);
-
-    const cameraApiBody = {
-      AcsEventCond: {
-        searchID: Math.random().toString(36).substring(2, 15),
-        searchResultPosition: 0,
-        maxResults: 500,
-        startTime: startTime,
-        endTime: endTime,
-      },
-    };
-
-    const cameraResponse = await digestAuth.request({
-      method: 'POST',
-      url: `${BASE_URL}/ISAPI/AccessControl/AcsEvent?format=json&devIndex=${DEV_INDEX}`,
-      data: cameraApiBody,
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-    if (cameraResponse.status !== 200) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to fetch attendance from camera system');
-    }
-
-    const filteredInfoList = (cameraResponse.data?.AcsEvent?.InfoList || []).filter((record) => record.employeeNoString);
-
-    console.log('FILTERD INFOR LIST', filteredInfoList);
-
-    console.log('LABOURS', await db.labour.findMany());
-
-    const employeeEntriesByDate = filteredInfoList.reduce((acc, entry) => {
-      const date = new Date(entry.time).toISOString().split('T')[0];
-      if (!acc[date]) {
-        acc[date] = {};
+      if (cameraResponse.status !== 200) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to fetch attendance from camera system');
       }
-      if (!acc[date][entry.employeeNoString]) {
-        acc[date][entry.employeeNoString] = [];
+
+      const filteredInfoList = (cameraResponse.data?.AcsEvent?.InfoList || []).filter((record) => record.employeeNoString);
+
+      const employeeEntriesByDate = filteredInfoList.reduce((acc, entry) => {
+        const date = new Date(entry.time).toISOString().split('T')[0];
+        if (!acc[date]) {
+          acc[date] = {};
+        }
+        if (!acc[date][entry.employeeNoString]) {
+          acc[date][entry.employeeNoString] = [];
+        }
+        acc[date][entry.employeeNoString].push(entry);
+        return acc;
+      }, {});
+
+      attendanceData = {};
+      for (const date in employeeEntriesByDate) {
+        const employeesForDate = employeeEntriesByDate[date];
+        attendanceData[date] = [];
+
+        for (const employeeNo in employeesForDate) {
+          const entries = employeesForDate[employeeNo];
+          if (entries.length > 0) {
+            entries.sort((a, b) => new Date(a.time) - new Date(b.time));
+
+            const inTime = new Date(entries[0].time);
+            const outTime = new Date(entries[entries.length - 1].time);
+
+            const workingHours = ((outTime - inTime) / (1000 * 60 * 60)).toFixed(2);
+
+            attendanceData[date].push({
+              labourId: employeeNo,
+              inTime: inTime.toISOString(),
+              outTime: outTime.toISOString(),
+              workingHours: parseFloat(workingHours),
+              status: 'PRESENT',
+              employeeNo: employeeNo,
+              firstName: entries[0].firstName || 'Unknown',
+              lastName: entries[0].lastName || 'Unknown',
+            });
+          }
+        }
       }
-      acc[date][entry.employeeNoString].push(entry);
-      return acc;
-    }, {});
+    } else {
+      const whereClause = {
+        date: {
+          gte: startTime,
+          lte: endTime,
+        },
+      };
 
-    const attendanceByDate = {};
-
-    Object.keys(employeeEntriesByDate).forEach((date) => {
-      const employeesForDate = employeeEntriesByDate[date];
-
-      attendanceByDate[date] = allEmployees.map((employee) => {
-        const entries = employeesForDate[employee.employeeNo] || [];
-        let workingHoursData = {
-          inTime: null,
-          outTime: null,
-          workingHours: 0,
+      if (contractorId) {
+        whereClause.labour = {
+          contractorId: parseInt(contractorId, 10),
         };
+      }
 
-        if (entries.length > 0) {
-          entries.sort((a, b) => new Date(a.time) - new Date(b.time));
-          const firstEntry = entries[0];
-          const lastEntry = entries[entries.length - 1];
-          const startTime = new Date(firstEntry.time);
-          const endTime = new Date(lastEntry.time);
-          const workingHours = (endTime - startTime) / (1000 * 60 * 60);
+      const dbRecords = await db.attendance.findMany({
+        where: whereClause,
+        include: {
+          labour: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  username: true,
+                  mobile_number: true,
+                },
+              },
+              contractor: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
 
-          workingHoursData = {
-            inTime: firstEntry.time,
-            outTime: lastEntry.time,
-            workingHours: workingHours.toFixed(2),
-          };
+      attendanceData = dbRecords.reduce((acc, record) => {
+        const date = new Date(record.date).toISOString().split('T')[0];
+        if (!acc[date]) {
+          acc[date] = [];
         }
 
-        return {
-          id: employee.id,
-          employeeNo: employee.employeeNo,
-          name: employee.user.name,
-          type: employee.type,
-          role: employee.user.role.name,
-          contractor: employee.contractor?.firm_name || null,
-          status: entries.length > 0 ? 'PRESENT' : 'ABSENT',
-          ...workingHoursData,
-        };
-      });
-    });
+        const inTime = new Date(record.inTime);
+        const outTime = new Date(record.outTime);
+        const workingHours = ((outTime - inTime) / (1000 * 60 * 60)).toFixed(2);
 
-    const summary = Object.keys(attendanceByDate).reduce((acc, date) => {
-      const employeesForDate = attendanceByDate[date];
-      acc[date] = {
-        total_present: employeesForDate.filter((emp) => emp.status === 'PRESENT').length,
-        total_absent: employeesForDate.filter((emp) => emp.status === 'ABSENT').length,
-        total_employees: employeesForDate.length,
-      };
-      return acc;
-    }, {});
+        acc[date].push({
+          labourId: record.labourId,
+          inTime: record.inTime,
+          outTime: record.outTime,
+          workingHours: parseFloat(workingHours),
+          status: record.status || 'PRESENT',
+          employeeNo: record.labour.employeeNo,
+          name: record.labour.user.name,
+          contractorId: record.labour.contractor.id,
+          contractorName: record.labour.contractor.user.name,
+        });
+
+        return acc;
+      }, {});
+    }
+
+    const uniqueRecords = [];
+    const seenLabourIds = new Set();
+
+    let totalWorkingHours = 0;
+    let totalRecordsCount = 0;
+
+    for (const date in attendanceData) {
+      const recordsForDate = attendanceData[date];
+      for (const record of recordsForDate) {
+        if (!seenLabourIds.has(record.labourId)) {
+          seenLabourIds.add(record.labourId);
+
+          const flattenedRecord = {
+            id: record.labourId,
+            inTime: record.inTime,
+            outTime: record.outTime,
+            workingHours: record.workingHours,
+            date: date,
+            name: record.labour?.user?.name || 'Unknown',
+            username: record.labour?.user?.username || 'Unknown',
+            mobile_number: record.labour?.user?.mobile_number || 'Unknown',
+            firm_name: record.labour?.contractor?.firm_name || 'Unknown',
+            employeeNo: record.employeeNo,
+            name: record.name,
+            contractorId: record.labour?.contractor?.id || null,
+            contractorName: record.labour?.contractor?.user?.name || 'Unknown',
+          };
+
+          uniqueRecords.push(flattenedRecord);
+
+          totalWorkingHours += record.workingHours || 0;
+          totalRecordsCount += 1;
+        }
+      }
+    }
+
+    const summary = {
+      totalWorkingHours: parseFloat(totalWorkingHours.toFixed(2)),
+      totalRecords: totalRecordsCount,
+    };
+
+    const columns = [
+      { field: 'id', headerName: 'ID', width: 100 },
+      { field: 'name', headerName: 'Name', width: 150 },
+      { field: 'username', headerName: 'Username', width: 150 },
+      { field: 'firm_name', headerName: 'Firm Name', width: 150 },
+      { field: 'employeeNo', headerName: 'Employee No', width: 150 },
+      { field: 'firstName', headerName: 'First Name', width: 150 },
+      { field: 'lastName', headerName: 'Last Name', width: 150 },
+      { field: 'inTime', headerName: 'In Time', width: 150 },
+      { field: 'outTime', headerName: 'Out Time', width: 150 },
+      { field: 'workingHours', headerName: 'Working Hours', width: 150 },
+      { field: 'date', headerName: 'Date', width: 150 },
+    ];
 
     return {
-      success: true,
-      data: {
-        results: attendanceByDate,
-        summary,
-      },
+      data: attendanceData,
+      summary,
+      columns,
       metadata: { dateRange: { startTime, endTime } },
     };
   } catch (error) {

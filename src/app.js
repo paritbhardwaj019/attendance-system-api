@@ -11,6 +11,7 @@ const routes = require('./routes/v1');
 const { errorConverter, errorHandler } = require('./middlewares/error');
 const ApiError = require('./utils/ApiError');
 const { initializeAttendanceCron } = require('./services/attendance.service');
+const db = require('./database/prisma');
 // const { seedAll } = require('./data/seedData');
 
 const app = express();

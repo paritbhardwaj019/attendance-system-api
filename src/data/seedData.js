@@ -2,54 +2,63 @@ const { PrismaClient } = require('@prisma/client');
 const db = new PrismaClient();
 const httpStatus = require('http-status');
 const ApiError = require('../utils/ApiError');
+const { ROLES } = require('../config/roles');
+const faker = require('faker');
+const { hashPassword } = require('../utils/utils');
+const { getNextCode } = require('../services/systemCode.service');
 
-const getAttendanceRecords = async (startDate, endDate) => {
-  return {
-    data: {
-      results: [
-        {
-          id: 1,
-          employeeNo: 'CONTRACTOR-2-LABOUR-3',
-          status: 'PRESENT',
-          inTime: '2023-10-01T08:00:00Z',
-          outTime: '2023-10-01T17:00:00Z',
-          workingHours: 8.5,
-        },
-        {
-          id: 2,
-          employeeNo: 'CONTRACTOR-2-LABOUR-4',
-          status: 'PRESENT',
-          inTime: '2023-10-01T08:30:00Z',
-          outTime: '2023-10-01T17:30:00Z',
-          workingHours: 9.0,
-        },
-        {
-          id: 3,
-          employeeNo: 'CONTRACTOR-2-LABOUR-5',
-          status: 'ABSENT',
-          inTime: null,
-          outTime: null,
-          workingHours: 0,
-        },
-        {
-          id: 4,
-          employeeNo: 'CONTRACTOR-2-LABOUR-6',
-          status: 'PRESENT',
-          inTime: '2023-10-01T09:00:00Z',
-          outTime: '2023-10-01T18:00:00Z',
-          workingHours: 8.0,
-        },
-        {
-          id: 5,
-          employeeNo: 'CONTRACTOR-2-LABOUR-7',
-          status: 'PRESENT',
-          inTime: '2023-10-01T07:45:00Z',
-          outTime: '2023-10-01T16:45:00Z',
-          workingHours: 8.0,
-        },
-      ],
-    },
-  };
+const generateAttendanceRecords = async (labourId, startDate, endDate) => {
+  try {
+    const labour = await db.labour.findUnique({
+      where: { id: labourId },
+      include: { user: true, contractor: true },
+    });
+
+    if (!labour) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Labour not found');
+    }
+
+    const attendanceRecords = [];
+    let currentDate = new Date(startDate);
+
+    while (currentDate <= new Date(endDate)) {
+      const inTime = new Date(currentDate);
+      inTime.setHours(7 + Math.floor(Math.random() * 4));
+      inTime.setMinutes(Math.floor(Math.random() * 60));
+      inTime.setSeconds(0);
+
+      const outTime = new Date(inTime);
+      outTime.setHours(16 + Math.floor(Math.random() * 5));
+      outTime.setMinutes(Math.floor(Math.random() * 60));
+      outTime.setSeconds(0);
+
+      const workingHours = ((outTime - inTime) / (1000 * 60 * 60)).toFixed(1);
+
+      const status = Math.random() > 0.1 ? 'PRESENT' : 'ABSENT';
+
+      attendanceRecords.push({
+        labourId: labour.id,
+        inTime: status === 'PRESENT' ? inTime.toISOString() : null,
+        outTime: status === 'PRESENT' ? outTime.toISOString() : null,
+        workingHours: status === 'PRESENT' ? parseFloat(workingHours) : 0,
+        date: currentDate.toISOString(),
+      });
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    await db.attendance.createMany({
+      data: attendanceRecords,
+    });
+
+    console.log(
+      `Attendance records generated for labour ${labour.user.name} (${labour.employeeNo}) from ${startDate} to ${endDate}.`
+    );
+    return attendanceRecords;
+  } catch (error) {
+    console.error('Error generating attendance records:', error);
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to generate attendance records: ' + error.message);
+  }
 };
 
 const createContractor = async (contractorData) => {
@@ -64,15 +73,30 @@ const createContractor = async (contractorData) => {
       throw new ApiError(httpStatus.CONFLICT, 'Username already exists');
     }
 
+    const admin = await db.user.findFirst({
+      where: {
+        role: {
+          name: ROLES.ADMIN,
+        },
+      },
+    });
+
+    if (!admin) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Admin not found');
+    }
+
+    const hashedPassword = await hashPassword(userDetails.password);
+
     const user = await db.user.create({
       data: {
         ...userDetails,
-        password: userDetails.password,
+        password: hashedPassword,
         role: { connect: { name: 'CONTRACTOR' } },
       },
     });
 
-    const employeeNo = `CONTRACTOR-${user.id}`;
+    // Generate employee number for contractor
+    const employeeNo = await getNextCode('CONTRACTOR');
 
     const contractor = await db.contractor.create({
       data: {
@@ -80,8 +104,8 @@ const createContractor = async (contractorData) => {
         firm_name,
         employeeNo,
         aadhar_number,
-        createdBy: { connect: { id: 1 } },
-        updatedBy: { connect: { id: 1 } },
+        createdBy: { connect: { id: user.id } },
+        updatedBy: { connect: { id: user.id } },
       },
     });
 
@@ -103,7 +127,7 @@ const createContractor = async (contractorData) => {
       });
     }
 
-    console.log(`Contractor ${userDetails.name} created successfully.`);
+    console.log(`Contractor ${userDetails.name} created successfully with employeeNo: ${employeeNo}.`);
     return contractor;
   } catch (error) {
     console.error('Error creating contractor:', error);
@@ -121,18 +145,33 @@ const createLabours = async (contractorId, laboursData) => {
       throw new ApiError(httpStatus.NOT_FOUND, 'Contractor not found');
     }
 
+    const admin = await db.user.findFirst({
+      where: {
+        role: {
+          name: ROLES.ADMIN,
+        },
+      },
+    });
+
+    if (!admin) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Admin not found');
+    }
+
     for (const labourData of laboursData) {
       const { photos, pdfs, aadhar_number, fingerprint_data, ...userDetails } = labourData;
+
+      const hashedPassword = await hashPassword(userDetails.password);
 
       const user = await db.user.create({
         data: {
           ...userDetails,
-          password: userDetails.password,
+          password: hashedPassword,
           role: { connect: { name: 'LABOUR' } },
         },
       });
 
-      const employeeNo = userDetails.username === 'ashish_kumar' ? '1002' : `${contractor.employeeNo}-LABOUR-${user.id}`;
+      // Generate employee number for labour
+      const employeeNo = await getNextCode('LABOUR');
 
       const labour = await db.labour.create({
         data: {
@@ -141,8 +180,8 @@ const createLabours = async (contractorId, laboursData) => {
           employeeNo,
           aadhar_number,
           fingerprint_data,
-          createdBy: { connect: { id: 1 } },
-          updatedBy: { connect: { id: 1 } },
+          createdBy: { connect: { id: admin.id } },
+          updatedBy: { connect: { id: admin.id } },
         },
       });
 
@@ -164,7 +203,7 @@ const createLabours = async (contractorId, laboursData) => {
         });
       }
 
-      console.log(`Labour ${userDetails.name} created successfully under contractor ${contractor.firm_name}.`);
+      console.log(`Labour ${userDetails.name} created successfully with employeeNo: ${employeeNo}.`);
     }
 
     console.log('All labours created successfully.');
@@ -174,81 +213,76 @@ const createLabours = async (contractorId, laboursData) => {
   }
 };
 
-const seedAll = async () => {
-  try {
-    const contractor = await createContractor({
-      name: 'John Doe',
-      username: 'john_doe',
+const generateIndianPhoneNumber = () => {
+  return `+91${faker.random.number({ min: 7000000000, max: 9999999999 })}`;
+};
+
+const generateIndianAadharNumber = () => {
+  return `${faker.random.number({ min: 1000, max: 9999 })}${faker.random.number({
+    min: 1000,
+    max: 9999,
+  })}${faker.random.number({ min: 1000, max: 9999 })}`;
+};
+
+const generateIndianName = () => {
+  const firstNames = ['Aarav', 'Vihaan', 'Arjun', 'Sai', 'Ishaan', 'Reyansh', 'Aryan', 'Aditya', 'Advait', 'Dhruv'];
+  const lastNames = ['Patel', 'Sharma', 'Singh', 'Kumar', 'Gupta', 'Verma', 'Jain', 'Mehta', 'Shah', 'Reddy'];
+  return `${faker.random.arrayElement(firstNames)} ${faker.random.arrayElement(lastNames)}`;
+};
+
+const generateUsername = (name) => {
+  const usernameBase = name.toLowerCase().replace(/\s+/g, '_');
+  const randomSuffix = faker.random.number({ min: 100, max: 999 });
+  return `${usernameBase}_${randomSuffix}`;
+};
+
+const createContractorWithLabours = async (contractorData) => {
+  const contractor = await createContractor(contractorData);
+
+  const laboursData = Array.from({ length: 5 }, () => {
+    const name = generateIndianName();
+    return {
+      name,
+      username: generateUsername(name),
       password: 'password123',
-      mobile_number: '1234567890',
-      firm_name: 'Doe Constructions',
-      aadhar_number: '123412341234',
+      mobile_number: generateIndianPhoneNumber(),
+      aadhar_number: generateIndianAadharNumber(),
+      fingerprint_data: faker.random.alphaNumeric(10),
       photos: [],
       pdfs: [],
+    };
+  });
+
+  await createLabours(contractor.id, laboursData);
+};
+
+const seedAll = async () => {
+  try {
+    const contractorsData = Array.from({ length: 4 }, () => {
+      const name = generateIndianName();
+      return {
+        name,
+        username: generateUsername(name),
+        password: 'password123',
+        mobile_number: generateIndianPhoneNumber(),
+        firm_name: `${generateIndianName()} Constructions`,
+        aadhar_number: generateIndianAadharNumber(),
+        photos: [],
+        pdfs: [],
+      };
     });
 
-    await createLabours(contractor.id, [
-      {
-        name: 'Labour 1',
-        username: 'labour_1',
-        password: 'password123',
-        mobile_number: '1111111111',
-        aadhar_number: '111111111111',
-        fingerprint_data: 'fingerprint1',
-        photos: [],
-        pdfs: [],
-      },
-      {
-        name: 'Labour 2',
-        username: 'labour_2',
-        password: 'password123',
-        mobile_number: '2222222222',
-        aadhar_number: '222222222222',
-        fingerprint_data: 'fingerprint2',
-        photos: [],
-        pdfs: [],
-      },
-      {
-        name: 'Labour 3',
-        username: 'labour_3',
-        password: 'password123',
-        mobile_number: '3333333333',
-        aadhar_number: '333333333333',
-        fingerprint_data: 'fingerprint3',
-        photos: [],
-        pdfs: [],
-      },
-      {
-        name: 'Labour 4',
-        username: 'labour_4',
-        password: 'password123',
-        mobile_number: '4444444444',
-        aadhar_number: '444444444444',
-        fingerprint_data: 'fingerprint4',
-        photos: [],
-        pdfs: [],
-      },
-      {
-        name: 'Labour 5',
-        username: 'labour_5',
-        password: 'password123',
-        mobile_number: '5555555555',
-        aadhar_number: '555555555555',
-        fingerprint_data: 'fingerprint5',
-        photos: [],
-        pdfs: [],
-      },
-      {
-        name: 'Ashish Kumar',
-        username: 'ashish_kumar',
-        password: 'password123',
-        mobile_number: '555555555512321',
-        aadhar_number: '555555555555123',
-        fingerprint_data: 'fingerprint6',
-        photos: [],
-        pdfs: [],
-      },
-    ]);
+    for (const contractorData of contractorsData) {
+      await createContractorWithLabours(contractorData);
+    }
+
+    const startDate = '2025-01-01';
+    const endDate = '2025-01-22';
+    const labours = await db.labour.findMany();
+
+    for (const labour of labours) {
+      await generateAttendanceRecords(labour.id, startDate, endDate);
+    }
 
     console.log('Seeding completed successfully.');
   } catch (error) {
@@ -261,6 +295,5 @@ const seedAll = async () => {
 seedAll();
 
 module.exports = {
-  getAttendanceRecords,
   seedAll,
 };

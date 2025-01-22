@@ -16,6 +16,8 @@ const login = async (username, password) => {
       password,
     });
 
+    console.log('LOGIN RES', response.data.data);
+
     JWT_TOKEN = response.data.data.accessToken;
     console.log('Login successful. JWT token:', JWT_TOKEN);
   } catch (error) {
@@ -49,7 +51,7 @@ const fetchLabourReport = async (filters = {}) => {
       params: filters,
     });
 
-    console.log('Labour Report:', response.data);
+    console.log('Labour Report:', response.data.data.data);
   } catch (error) {
     console.error('Error fetching labour report:', error.response ? error.response.data : error.message);
   }
@@ -108,26 +110,58 @@ const fetchContractorLabourReport = async (filters = {}) => {
   }
 };
 
+/**
+ * Fetch attendance records.
+ * @param {Object} filters - Filters for fetching attendance records.
+ * @param {string} [filters.startDate] - Start date for filtering attendance records.
+ * @param {string} [filters.endDate] - End date for filtering attendance records.
+ */
+const fetchAttendance = async (filters = {}) => {
+  if (!JWT_TOKEN) {
+    console.error('Please login first.');
+    return;
+  }
+
+  try {
+    const response = await axios.get(`${BASE_URL}/camera/attendance`, {
+      headers: {
+        'x-auth-token': JWT_TOKEN,
+      },
+      params: filters,
+    });
+
+    console.log('Attendance Records:', response.data.data.results);
+  } catch (error) {
+    console.error('Error fetching attendance records:', error.response ? error.response.data : error.message);
+  }
+};
+
 (async () => {
-  await login('whynotparit', 'b14ck-cyph3R');
+  await login('ishaan_shah_840', 'password123');
 
   await fetchLabourReport({
-    // contractorId: 1,
-    // startDate: '2023-10-01',
-    // endDate: '2023-10-31',
+    contractorId: 1,
+    startDate: '2025-01-01',
+    endDate: '2025-01-31',
     sortBy: 'date',
     order: 'asc',
     page: 1,
     limit: 10,
   });
 
-  await fetchLabourReportById(6, {
-    // startDate: '2023-10-01',
-    // endDate: '2023-10-31',
-  });
+  // await fetchLabourReportById(6, {
+  //   startDate: '2025-01-01',
+  //   endDate: '2025-01-31',
+  // });
 
-  await fetchContractorLabourReport({
-    // startDate: '2023-10-01',
-    // endDate: '2023-10-31',
-  });
+  // await fetchContractorLabourReport({
+  //   startDate: '2025-01-01',
+  //   endDate: '2025-01-31',
+  // });
+
+  // await fetchAttendance({
+  //   startDate: '2025-01-10',
+  //   endDate: '2025-01-31',
+  //   contractorId: 1,
+  // });
 })();

@@ -90,10 +90,12 @@ const fetchLabourReportHandler = async (filters = {}) => {
               },
             },
             contractor: {
-              select: {
-                id: true,
-                firm_name: true,
-                employeeNo: true,
+              include: {
+                user: {
+                  select: {
+                    name: true,
+                  },
+                },
               },
             },
           },
@@ -128,6 +130,8 @@ const fetchLabourReportHandler = async (filters = {}) => {
         mobile_number: record.labour.user.mobile_number,
         firm_name: record.labour.contractor.firm_name,
         employeeNo: record.labour.employeeNo,
+        contractorName: record.labour.contractor.user.name,
+        contractorId: record.labour.contractor.id,
       };
 
       uniqueRecords.push(flattenedRecord);

@@ -9,6 +9,7 @@ let server;
 db.$connect()
   .then(() => {
     logger.info('Connected to MySQL database');
+
     server = app.listen(config.port, () => {
       logger.info(`Listening to port ${config.port}`);
     });

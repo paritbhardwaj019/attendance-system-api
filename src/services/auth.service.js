@@ -53,6 +53,7 @@ const createUserResponse = (user) => ({
   username: user.username,
   mobile_number: user.mobile_number,
   role: user.role.name,
+  contractorId: user.role.name === 'CONTRACTOR' ? user.contractor?.id || null : null,
 });
 
 const loginWithUserNameHandler = async (data) => {
@@ -62,17 +63,17 @@ const loginWithUserNameHandler = async (data) => {
     where: {
       username: data.username,
     },
-    select: {
+    include: {
       role: {
         select: {
           name: true,
         },
       },
-      password: true,
-      mobile_number: true,
-      name: true,
-      username: true,
-      id: true,
+      contractor: {
+        select: {
+          id: true,
+        },
+      },
     },
   });
 
@@ -85,6 +86,10 @@ const loginWithUserNameHandler = async (data) => {
   });
 
   const userResponse = createUserResponse(user);
+
+  if (user.role.name === 'CONTRACTOR') {
+    userResponse.contractorId = user.contractor?.id || null;
+  }
 
   return { user: userResponse, accessToken };
 };
