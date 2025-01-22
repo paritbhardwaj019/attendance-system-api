@@ -321,7 +321,38 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
     const today = new Date();
     const isToday = start.toDateString() === today.toDateString();
 
+    const labours = await db.labour.findMany({
+      select: {
+        employeeNo: true,
+        photos: true,
+      },
+    });
+
+    const employeeNoToPhotosMap = labours.reduce((acc, labour) => {
+      acc[labour.employeeNo] = labour.photos;
+      return acc;
+    }, {});
+
     if (isToday) {
+      console.log('START TIME', startTime);
+      console.log('END TIME', endTime);
+
+      const currentTime = new Date();
+      const twoHoursAgo = new Date(currentTime.getTime() - 4 * 60 * 60 * 1000);
+
+      const timezoneOffset = '+05:30'; // Replace with your desired timezone offset
+      const year = twoHoursAgo.getFullYear();
+      const month = String(twoHoursAgo.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+      const day = String(twoHoursAgo.getDate()).padStart(2, '0');
+      const hours = String(twoHoursAgo.getHours()).padStart(2, '0');
+      const minutes = String(twoHoursAgo.getMinutes()).padStart(2, '0');
+      const seconds = String(twoHoursAgo.getSeconds()).padStart(2, '0');
+
+      // Construct the startTime string in the desired format
+      startTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${timezoneOffset}`;
+
+      console.log('UPDATED START TIME', startTime);
+
       const cameraApiBody = {
         AcsEventCond: {
           searchID: Math.random().toString(36).substring(2, 15),
@@ -343,9 +374,13 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
         throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to fetch attendance from camera system');
       }
 
-      const filteredInfoList = (cameraResponse.data?.AcsEvent?.InfoList || []).filter((record) => record.employeeNoString);
+      console.log('CAMERA RESPONSE', cameraResponse.data?.AcsEvent?.InfoList);
 
-      console.log('FILTERED INFOR LIST', filteredInfoList);
+      const filteredInfoList = (cameraResponse.data?.AcsEvent?.InfoList || []).filter((record) => {
+        return labours.some((labour) => labour.employeeNo === record.employeeNoString);
+      });
+
+      console.log('FILTERED INFO LIST', filteredInfoList);
 
       const employeeEntriesByDate = filteredInfoList.reduce((acc, entry) => {
         const date = new Date(entry.time).toISOString().split('T')[0];
@@ -369,23 +404,24 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
           if (entries.length > 0) {
             entries.sort((a, b) => new Date(a.time) - new Date(b.time));
 
-            // Use the original time string from the camera API response
-            const inTime = entries[0].time; // Preserve the original timezone
+            const inTime = entries[0].time;
             const outTime = entries.length === 1 ? inTime : entries[entries.length - 1].time;
 
-            // Calculate working hours in hours
             const inTimeDate = new Date(inTime);
             const outTimeDate = new Date(outTime);
             const workingHours = ((outTimeDate - inTimeDate) / (1000 * 60 * 60)).toFixed(2);
 
+            const photos = employeeNoToPhotosMap[employeeNo] || [];
+
             attendanceData[date].push({
               labourId: employeeNo,
-              inTime: inTime, // Use the original time string
-              outTime: outTime, // Use the original time string
+              inTime: inTime,
+              outTime: outTime,
               workingHours: parseFloat(workingHours),
               status: 'PRESENT',
               employeeNo: employeeNo,
               name: entries[0].name || 'Unknown',
+              photos: photos,
             });
           }
         }
@@ -427,6 +463,7 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
                   },
                 },
               },
+              photos: true,
             },
           },
         },
@@ -452,6 +489,7 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
           name: record.labour.user.name,
           contractorId: record.labour.contractor.id,
           contractorName: record.labour.contractor.user.name,
+          photos: record.labour.photos,
         });
 
         return acc;
@@ -484,6 +522,7 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
             name: record.name,
             contractorId: record.labour?.contractor?.id || null,
             contractorName: record.labour?.contractor?.user?.name || 'Unknown',
+            photos: record.photos || [],
           };
 
           uniqueRecords.push(flattenedRecord);
