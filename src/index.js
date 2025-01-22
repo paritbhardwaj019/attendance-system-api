@@ -7,8 +7,10 @@ const db = require('./database/prisma');
 let server;
 
 db.$connect()
-  .then(() => {
+  .then(async () => {
     logger.info('Connected to MySQL database');
+
+    // console.log(await db.attendance.findMany());
 
     server = app.listen(config.port, () => {
       logger.info(`Listening to port ${config.port}`);

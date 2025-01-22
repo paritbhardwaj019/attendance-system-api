@@ -35,11 +35,13 @@ const fetchLabourReportHandler = async (filters = {}) => {
   const formattedStartDate = startDate ? new Date(startDate).toISOString().split('T')[0] : today;
   const formattedEndDate = endDate ? new Date(endDate).toISOString().split('T')[0] : today;
 
-  const daysDifference = calculateDaysDifference(formattedStartDate, formattedEndDate);
+  const isToday = formattedStartDate === today;
+
+  console.log('isToday', isToday);
 
   let attendanceRecords;
 
-  if (daysDifference < 1) {
+  if (isToday) {
     const cameraResponse = await cameraService.getAttendanceRecords(formattedStartDate, formattedEndDate);
 
     attendanceRecords = [];
@@ -52,27 +54,25 @@ const fetchLabourReportHandler = async (filters = {}) => {
           outTime: record.outTime,
           workingHours: parseFloat(record.workingHours || 0),
           date: new Date(date),
-          labour: {
-            user: {
-              name: record.name,
-              username: record.employeeNo,
-            },
-            contractor: {
-              firm_name: record.contractor,
-              employeeNo: record.employeeNo,
-            },
-            employeeNo: record.employeeNo,
-          },
+          name: record.name || 'Unknown',
+          contractorId: record.contractorId || null,
+          contractorName: record.contractor || 'Unknown',
         });
       }
     }
   } else {
+    console.log(formattedEndDate, formattedStartDate);
+
+    const startDateTime = new Date(formattedStartDate);
+    const endDateTime = new Date(formattedEndDate);
+    endDateTime.setHours(23, 59, 59, 999);
+
     const whereClause = {
       labourId: labourId ? parseInt(labourId, 10) : undefined,
       labour: contractorId ? { contractorId: parseInt(contractorId, 10) } : undefined,
       date: {
-        gte: formattedStartDate ? new Date(formattedStartDate) : undefined,
-        lte: formattedEndDate ? new Date(formattedEndDate) : undefined,
+        gte: startDateTime,
+        lte: endDateTime,
       },
     };
 
@@ -107,6 +107,18 @@ const fetchLabourReportHandler = async (filters = {}) => {
       skip: skip,
       take: take,
     });
+
+    attendanceRecords = attendanceRecords.map((record) => ({
+      id: record.id,
+      labourId: record.labourId,
+      inTime: record.inTime,
+      outTime: record.outTime,
+      workingHours: record.workingHours,
+      date: record.date,
+      name: record.labour.user.name,
+      contractorId: record.labour.contractor.id,
+      contractorName: record.labour.contractor.user.name,
+    }));
   }
 
   const uniqueRecords = [];
@@ -125,13 +137,9 @@ const fetchLabourReportHandler = async (filters = {}) => {
         outTime: record.outTime,
         workingHours: record.workingHours,
         date: record.date,
-        name: record.labour.user.name,
-        username: record.labour.user.username,
-        mobile_number: record.labour.user.mobile_number,
-        firm_name: record.labour.contractor.firm_name,
-        employeeNo: record.labour.employeeNo,
-        contractorName: record.labour.contractor.user.name,
-        contractorId: record.labour.contractor.id,
+        name: record.name,
+        contractorId: record.contractorId,
+        contractorName: record.contractorName,
       };
 
       uniqueRecords.push(flattenedRecord);
@@ -160,9 +168,8 @@ const fetchLabourReportHandler = async (filters = {}) => {
   const columns = [
     { field: 'id', headerName: 'ID', width: 100 },
     { field: 'name', headerName: 'Name', width: 150 },
-    { field: 'username', headerName: 'Username', width: 150 },
-    { field: 'firm_name', headerName: 'Firm Name', width: 150 },
-    { field: 'employeeNo', headerName: 'Employee No', width: 150 },
+    { field: 'contractorId', headerName: 'Contractor ID', width: 150 },
+    { field: 'contractorName', headerName: 'Contractor Name', width: 150 },
     { field: 'inTime', headerName: 'In Time', width: 150 },
     { field: 'outTime', headerName: 'Out Time', width: 150 },
     { field: 'workingHours', headerName: 'Working Hours', width: 150 },
@@ -181,7 +188,6 @@ const fetchLabourReportHandler = async (filters = {}) => {
     },
   };
 };
-
 /**
  * Handler to fetch detailed labour report by labour ID.
  * @param {number} labourId - ID of the labour to fetch the report for.
@@ -197,11 +203,11 @@ const fetchLabourReportByIdHandler = async (labourId, filters = {}) => {
   const formattedStartDate = startDate ? new Date(startDate).toISOString().split('T')[0] : today;
   const formattedEndDate = endDate ? new Date(endDate).toISOString().split('T')[0] : today;
 
-  const daysDifference = calculateDaysDifference(formattedStartDate, formattedEndDate);
+  const isToday = formattedStartDate === today;
 
   let attendanceRecords;
 
-  if (daysDifference < 1) {
+  if (isToday) {
     const cameraResponse = await cameraService.getAttendanceRecords(formattedStartDate, formattedEndDate);
 
     const labour = await db.labour.findUnique({
@@ -240,11 +246,15 @@ const fetchLabourReportByIdHandler = async (labourId, filters = {}) => {
       }
     }
   } else {
+    const startDateTime = new Date(formattedStartDate);
+    const endDateTime = new Date(formattedEndDate);
+    endDateTime.setHours(23, 59, 59, 999);
+
     const whereClause = {
       labourId: parseInt(labourId, 10),
       date: {
-        gte: formattedStartDate ? new Date(formattedStartDate) : undefined,
-        lte: formattedEndDate ? new Date(formattedEndDate) : undefined,
+        gte: startDateTime,
+        lte: endDateTime,
       },
     };
 
@@ -312,6 +322,7 @@ const fetchLabourReportByIdHandler = async (labourId, filters = {}) => {
     columns,
   };
 };
+
 /**
  * Handler to fetch contractor-wise labour working hours report.
  * @param {Object} filters - Filters for fetching the report.
@@ -326,11 +337,11 @@ const fetchContractorLabourReportHandler = async (filters = {}) => {
   const formattedStartDate = startDate ? new Date(startDate).toISOString().split('T')[0] : today;
   const formattedEndDate = endDate ? new Date(endDate).toISOString().split('T')[0] : today;
 
-  const daysDifference = calculateDaysDifference(formattedStartDate, formattedEndDate);
+  const isToday = formattedStartDate === today;
 
   let contractorReports;
 
-  if (daysDifference < 1) {
+  if (isToday) {
     const cameraResponse = await cameraService.getAttendanceRecords(formattedStartDate, formattedEndDate);
 
     const contractors = await db.contractor.findMany({
@@ -365,6 +376,10 @@ const fetchContractorLabourReportHandler = async (filters = {}) => {
       };
     });
   } else {
+    const startDateTime = new Date(formattedStartDate);
+    const endDateTime = new Date(formattedEndDate);
+    endDateTime.setHours(23, 59, 59, 999);
+
     const contractors = await db.contractor.findMany({
       include: {
         labour: {
@@ -372,8 +387,8 @@ const fetchContractorLabourReportHandler = async (filters = {}) => {
             attendance: {
               where: {
                 date: {
-                  gte: formattedStartDate ? new Date(formattedStartDate) : undefined,
-                  lte: formattedEndDate ? new Date(formattedEndDate) : undefined,
+                  gte: startDateTime,
+                  lte: endDateTime,
                 },
               },
               select: {

@@ -7,6 +7,14 @@ const faker = require('faker');
 const { hashPassword } = require('../utils/utils');
 const { getNextCode } = require('../services/systemCode.service');
 
+const formatDateWithTimezone = (date) => {
+  const offset = date.getTimezoneOffset();
+  const hours = Math.abs(Math.floor(offset / 60));
+  const minutes = Math.abs(offset % 60);
+  const sign = offset > 0 ? '-' : '+';
+  return `${date.toISOString().slice(0, -1)}${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
 const generateAttendanceRecords = async (labourId, startDate, endDate) => {
   try {
     const labour = await db.labour.findUnique({
@@ -38,10 +46,10 @@ const generateAttendanceRecords = async (labourId, startDate, endDate) => {
 
       attendanceRecords.push({
         labourId: labour.id,
-        inTime: status === 'PRESENT' ? inTime.toISOString() : null,
-        outTime: status === 'PRESENT' ? outTime.toISOString() : null,
+        inTime: status === 'PRESENT' ? formatDateWithTimezone(inTime) : null,
+        outTime: status === 'PRESENT' ? formatDateWithTimezone(outTime) : null,
         workingHours: status === 'PRESENT' ? parseFloat(workingHours) : 0,
-        date: currentDate.toISOString(),
+        date: formatDateWithTimezone(currentDate),
       });
 
       currentDate.setDate(currentDate.getDate() + 1);
@@ -95,7 +103,6 @@ const createContractor = async (contractorData) => {
       },
     });
 
-    // Generate employee number for contractor
     const employeeNo = await getNextCode('CONTRACTOR');
 
     const contractor = await db.contractor.create({
@@ -170,7 +177,6 @@ const createLabours = async (contractorId, laboursData) => {
         },
       });
 
-      // Generate employee number for labour
       const employeeNo = await getNextCode('LABOUR');
 
       const labour = await db.labour.create({

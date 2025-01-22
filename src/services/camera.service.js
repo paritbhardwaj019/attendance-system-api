@@ -315,11 +315,13 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
 
     const start = new Date(startTime);
     const end = new Date(endTime);
-    const daysDifference = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
 
     let attendanceData;
 
-    if (daysDifference < 1) {
+    const today = new Date();
+    const isToday = start.toDateString() === today.toDateString();
+
+    if (isToday) {
       const cameraApiBody = {
         AcsEventCond: {
           searchID: Math.random().toString(36).substring(2, 15),
@@ -343,6 +345,8 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
 
       const filteredInfoList = (cameraResponse.data?.AcsEvent?.InfoList || []).filter((record) => record.employeeNoString);
 
+      console.log('FILTERED INFOR LIST', filteredInfoList);
+
       const employeeEntriesByDate = filteredInfoList.reduce((acc, entry) => {
         const date = new Date(entry.time).toISOString().split('T')[0];
         if (!acc[date]) {
@@ -365,20 +369,23 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
           if (entries.length > 0) {
             entries.sort((a, b) => new Date(a.time) - new Date(b.time));
 
-            const inTime = new Date(entries[0].time);
-            const outTime = new Date(entries[entries.length - 1].time);
+            // Use the original time string from the camera API response
+            const inTime = entries[0].time; // Preserve the original timezone
+            const outTime = entries.length === 1 ? inTime : entries[entries.length - 1].time;
 
-            const workingHours = ((outTime - inTime) / (1000 * 60 * 60)).toFixed(2);
+            // Calculate working hours in hours
+            const inTimeDate = new Date(inTime);
+            const outTimeDate = new Date(outTime);
+            const workingHours = ((outTimeDate - inTimeDate) / (1000 * 60 * 60)).toFixed(2);
 
             attendanceData[date].push({
               labourId: employeeNo,
-              inTime: inTime.toISOString(),
-              outTime: outTime.toISOString(),
+              inTime: inTime, // Use the original time string
+              outTime: outTime, // Use the original time string
               workingHours: parseFloat(workingHours),
               status: 'PRESENT',
               employeeNo: employeeNo,
-              firstName: entries[0].firstName || 'Unknown',
-              lastName: entries[0].lastName || 'Unknown',
+              name: entries[0].name || 'Unknown',
             });
           }
         }
