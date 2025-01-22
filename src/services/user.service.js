@@ -20,105 +20,110 @@ const createUserHandler = async (userData) => {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Username already taken');
   }
 
-  return await db.$transaction(async (prisma) => {
-    const user = await prisma.user.create({
-      data: {
-        name: userData.name,
-        username: userData.username,
-        password: await hashPassword(userData.password),
-        mobile_number: userData.mobile_number,
-        role: {
-          connect: { name: userData.user_type },
-        },
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    let employeeNo;
-
-    switch (userData.user_type) {
-      case ROLES.ADMIN:
-        employeeNo = await getNextCode('ADMIN');
-        await prisma.admin.create({
-          data: {
-            user: { connect: { id: user.id } },
-            employeeNo,
-          },
-        });
-        break;
-
-      case ROLES.MANAGER:
-        employeeNo = await getNextCode('MANAGER');
-        await prisma.manager.create({
-          data: {
-            user: { connect: { id: user.id } },
-            employeeNo,
-          },
-        });
-        break;
-
-      case ROLES.CONTRACTOR:
-        employeeNo = await getNextCode('CONTRACTOR');
-        await prisma.contractor.create({
-          data: {
-            user: { connect: { id: user.id } },
-            firm_name: userData.firm_name,
-            employeeNo,
-            manager: userData.manager_id
-              ? {
-                  connect: { id: userData.manager_id },
-                }
-              : undefined,
-          },
-        });
-        await cameraService.addUserToCamera(employeeNo, user.name);
-        break;
-
-      case ROLES.LABOUR:
-        if (!userData.contractor_id || !userData.fingerprint_data) {
-          throw new ApiError(httpStatus.BAD_REQUEST, 'Contractor ID and fingerprint data required for Labour');
-        }
-        employeeNo = await getNextCode('LABOUR');
-        await prisma.labour.create({
-          data: {
-            user: { connect: { id: user.id } },
-            contractor: { connect: { id: userData.contractor_id } },
-            fingerprint_data: userData.fingerprint_data,
-            employeeNo,
-          },
-        });
-        await cameraService.addUserToCamera(employeeNo, user.name);
-        break;
-
-      default:
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user type');
-    }
-
-    const createdUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: {
-        role: true,
-        admin: true,
-        manager: true,
-        contractor: {
-          include: {
-            manager: true,
-            labour: true,
+  return await db.$transaction(
+    async (prisma) => {
+      const user = await prisma.user.create({
+        data: {
+          name: userData.name,
+          username: userData.username,
+          password: await hashPassword(userData.password),
+          mobile_number: userData.mobile_number,
+          role: {
+            connect: { name: userData.user_type },
           },
         },
-        labour: true,
-      },
-    });
+        include: {
+          role: true,
+        },
+      });
 
-    if (!createdUser) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'User not found after creation');
+      let employeeNo;
+
+      switch (userData.user_type) {
+        case ROLES.ADMIN:
+          employeeNo = await getNextCode('ADMIN');
+          await prisma.admin.create({
+            data: {
+              user: { connect: { id: user.id } },
+              employeeNo,
+            },
+          });
+          break;
+
+        case ROLES.MANAGER:
+          employeeNo = await getNextCode('MANAGER');
+          await prisma.manager.create({
+            data: {
+              user: { connect: { id: user.id } },
+              employeeNo,
+            },
+          });
+          break;
+
+        case ROLES.CONTRACTOR:
+          employeeNo = await getNextCode('CONTRACTOR');
+          await prisma.contractor.create({
+            data: {
+              user: { connect: { id: user.id } },
+              firm_name: userData.firm_name,
+              employeeNo,
+              manager: userData.manager_id
+                ? {
+                    connect: { id: userData.manager_id },
+                  }
+                : undefined,
+            },
+          });
+          await cameraService.addUserToCamera(employeeNo, user.name);
+          break;
+
+        case ROLES.LABOUR:
+          if (!userData.contractor_id || !userData.fingerprint_data) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Contractor ID and fingerprint data required for Labour');
+          }
+          employeeNo = await getNextCode('LABOUR');
+          await prisma.labour.create({
+            data: {
+              user: { connect: { id: user.id } },
+              contractor: { connect: { id: userData.contractor_id } },
+              fingerprint_data: userData.fingerprint_data,
+              employeeNo,
+            },
+          });
+          await cameraService.addUserToCamera(employeeNo, user.name);
+          break;
+
+        default:
+          throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user type');
+      }
+
+      const createdUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        include: {
+          role: true,
+          admin: true,
+          manager: true,
+          contractor: {
+            include: {
+              manager: true,
+              labour: true,
+            },
+          },
+          labour: true,
+        },
+      });
+
+      if (!createdUser) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'User not found after creation');
+      }
+
+      delete createdUser.password;
+      return createdUser;
+    },
+    {
+      timeout: 10000,
     }
-
-    delete createdUser.password;
-    return createdUser;
-  });
+  );
 };
 /**
  * Handler to fetch multiple users with filters, sorting, and pagination.
