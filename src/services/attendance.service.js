@@ -4,6 +4,7 @@ const ApiError = require('../utils/ApiError');
 const cron = require('node-cron');
 const logger = require('../config/logger');
 const cameraService = require('./camera.service');
+const { getDCameraResult } = require('./camera.service');
 // const { getAttendanceRecords } = require('../data/seedData');
 
 /**
@@ -188,64 +189,124 @@ const getAttendanceRecordsForManagerAndContractors = async (labourId, startDate,
 
 const fetchAndStoreAttendance = async () => {
   try {
-    const todayStart = new Date().toISOString().split('T')[0];
-    const todayEnd = new Date().toISOString().split('T')[0];
+    const todayString = new Date().toISOString().split('T')[0];
 
-    const attendanceData = await cameraService.getAttendanceRecords(todayStart, todayEnd);
-
-    const recordsByDate = attendanceData.data.results;
-
-    console.log('recordsByDate', recordsByDate);
-
-    for (const date in recordsByDate) {
-      const records = typeof recordsByDate[date] !== 'object' ? [] : recordsByDate[date];
-
-      for (const record of records) {
-        const labour = await db.labour.findUnique({
-          where: { employeeNo: record.employeeNo },
-        });
-
-        if (!labour) {
-          console.error(`Labour with employeeNo ${record.employeeNo} not found.`);
-          continue;
-        }
-
-        const recordDate = new Date(date);
-
-        await db.attendance.upsert({
-          where: {
-            labourId_date: {
-              labourId: labour.id,
-              date: recordDate,
+    // Get all labours and existing attendance records
+    const [labours, attendanceRecords] = await Promise.all([
+      db.labour.findMany({
+        include: {
+          user: {
+            select: {
+              name: true,
             },
           },
-          update: {
-            inTime: record.inTime ? record.inTime : null,
-            outTime: record.outTime ? record.outTime : null,
-            workingHours: parseFloat(record.workingHours),
-          },
-          create: {
-            labour: {
-              connect: {
-                id: labour.id,
+          contractor: {
+            include: {
+              user: {
+                select: {
+                  name: true,
+                },
               },
             },
-            inTime: record.inTime ? new Date(record.inTime) : null,
-            outTime: record.outTime ? new Date(record.outTime) : null,
-            workingHours: parseFloat(record.workingHours),
-            date: recordDate,
+          },
+        },
+      }),
+      db.attendance.findMany({
+        where: {
+          date: {
+            gte: new Date(todayString + 'T00:00:00Z'),
+            lte: new Date(todayString + 'T23:59:59Z'),
+          },
+        },
+      }),
+    ]);
+
+    // Create attendance map for quick lookup
+    const attendanceMap = new Map(
+      attendanceRecords.map(record => [record.labourId, record])
+    );
+
+    // Get camera data for last 30 minutes
+    const cameraData = await getDCameraResult();
+    console.log('Camera records found:', cameraData.length);
+
+    // Process each labour
+    for (const labour of labours) {
+      // Find camera records for this labour
+      const cameraRecords = cameraData.filter(
+        record => record.employeeNoString === labour.employeeNo
+      );
+
+      let attendanceRecord = attendanceMap.get(labour.id);
+      let inTime = attendanceRecord?.inTime || null;
+      let outTime = attendanceRecord?.outTime || null;
+      let workingHours = 0;
+
+      if (cameraRecords.length > 0) {
+        // Sort camera records by time
+        cameraRecords.sort((a, b) => new Date(a.time) - new Date(b.time));
+        const latestCameraTime = new Date(cameraRecords[cameraRecords.length - 1].time);
+
+        if (!attendanceRecord) {
+          // Case 1: No attendance record exists - create new
+          await db.attendance.create({
+            data: {
+              labourId: labour.id,
+              date: new Date(todayString),
+              inTime: new Date(cameraRecords[0].time),
+              outTime: latestCameraTime,
+              workingHours: (latestCameraTime - new Date(cameraRecords[0].time)) / (1000 * 60 * 60),
+            },
+          });
+        } else {
+          // Case 2: Attendance record exists
+          if (!inTime) {
+            // Case 2a: No inTime - update both inTime and outTime
+            await db.attendance.update({
+              where: { id: attendanceRecord.id },
+              data: {
+                inTime: new Date(cameraRecords[0].time),
+                outTime: latestCameraTime,
+                workingHours: (latestCameraTime - new Date(cameraRecords[0].time)) / (1000 * 60 * 60),
+              },
+            });
+          } else if (latestCameraTime > new Date(outTime)) {
+            // Case 2b: Update outTime if camera time is later
+            await db.attendance.update({
+              where: { id: attendanceRecord.id },
+              data: {
+                outTime: latestCameraTime,
+                workingHours: (latestCameraTime - new Date(inTime)) / (1000 * 60 * 60),
+              },
+            });
+          }
+        }
+      } else if (!attendanceRecord) {
+        // Create absent record if no attendance record exists
+        await db.attendance.create({
+          data: {
+            labourId: labour.id,
+            date: new Date(todayString),
+            inTime: null,
+            outTime: null,
+            workingHours: 0,
           },
         });
       }
     }
 
+    console.log('Attendance records processed successfully');
     return {
       success: true,
       message: 'Attendance records stored successfully',
     };
+
   } catch (error) {
     console.error('Error in fetchAndStoreAttendance:', error);
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch and store attendance: ' + error.message);
+    throw new ApiError(
+      httpStatus.INTERNAL_SERVER_ERROR,
+      'Failed to fetch and store attendance: ' + error.message
+    );
   }
 };
 
@@ -307,15 +368,15 @@ const fetchAndStoreAttendance = async () => {
 
 const getNextExecutionTime = (cronExpression) => {
   const currentDate = new Date();
-  const [hours, , , ,] = cronExpression.split(' ');
-  const nextHour = parseInt(hours.replace('*/6', '')) + 6;
+  const minutes = currentDate.getMinutes();
+  const nextMinutes = minutes < 30 ? 30 : 0;
+  const nextHour = minutes < 30 ? currentDate.getHours() : currentDate.getHours() + 1;
 
   const nextExecution = new Date(currentDate);
-  nextExecution.setHours(nextHour, 0, 0, 0);
+  nextExecution.setHours(nextHour, nextMinutes, 0, 0);
 
   if (nextExecution < currentDate) {
-    nextExecution.setDate(nextExecution.getDate() + 1);
-    nextExecution.setHours(0, 0, 0, 0);
+    nextExecution.setHours(nextExecution.getHours() + 1);
   }
 
   return nextExecution;
@@ -324,7 +385,7 @@ const getNextExecutionTime = (cronExpression) => {
 const initializeAttendanceCron = () => {
   logger.info('Initializing attendance cron job');
 
-  const cronExpression = '0 * * * *';
+  const cronExpression = '*/30 * * * *';
 
   const job = cron.schedule(cronExpression, async () => {
     const startTime = new Date();
@@ -388,7 +449,7 @@ const attendanceService = {
   // getAttendanceRecords,
   getAttendanceRecordsForManagerAndContractors,
   fetchAndStoreAttendance,
-  initializeAttendanceCron,
+  initializeAttendanceCron
 };
 
 module.exports = attendanceService;

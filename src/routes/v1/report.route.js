@@ -6,16 +6,42 @@ const { ROLES } = require('../../config/roles');
 
 const reportRouter = express.Router();
 
+// Place specific routes before parametric routes
+reportRouter
+  .route('/dailyReport')
+  .get(
+    checkJWT, 
+    checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR]), 
+    reportController.getDailyReport
+  );
+
 reportRouter
   .route('/contractor')
-  .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER]), reportController.getContractorLabourReport);
+  .get(
+    checkJWT, 
+    checkRole([ROLES.ADMIN, ROLES.MANAGER]), 
+    reportController.getContractorLabourReport
+  );
+
+// Generic and parametric routes at the end
+reportRouter
+  .route('/:id')
+  .get(
+    checkJWT, 
+    checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR]), 
+    reportController.getLabourReportById
+  );
 
 reportRouter
   .route('/')
-  .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR]), reportController.getLabourReport);
+  .get(
+    checkJWT, 
+    checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR]), 
+    reportController.getLabourReport
+  );
 
 reportRouter
-  .route('/:id')
-  .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR]), reportController.getLabourReportById);
+  .route('/customReport')
+  .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR]), reportController.getCustomReport);
 
 module.exports = reportRouter;

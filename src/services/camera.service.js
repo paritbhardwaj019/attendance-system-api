@@ -6,6 +6,7 @@ const db = require('../database/prisma');
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
+const timeUtils = require('../utils/timeUtils');
 
 const BASE_URL = 'http://43.224.222.244:85';
 const DEV_INDEX = '20F57640-5C66-49B3-86D5-750E856BEA4A';
@@ -303,24 +304,42 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
 
     if (!startDate || !endDate) {
       const todayRange = getTodayDateRange();
+      console.log('todayRange', todayRange)
       startTime = todayRange.startDate;
       endTime = todayRange.endDate;
     } else {
       const formattedStartDate = formatDateForCamera(startDate);
       const formattedEndDate = formatDateForCamera(endDate);
-
+      console.log('formattedStartDate', formattedStartDate)
       startTime = typeof formattedStartDate === 'object' ? formattedStartDate.startTime : formattedStartDate;
       endTime = typeof formattedEndDate === 'object' ? formattedEndDate.endTime : formattedEndDate;
+
+      console.log('startTime', startTime)
+      console.log('endTime', endTime)
     }
 
-    const start = new Date(startTime);
-    const end = new Date(endTime);
+    const start = formatTimeInIndianTimezone(startTime);
+    const end = formatTimeInIndianTimezone(endTime);
 
-    let attendanceData;
-
+    console.log('start', start, 'end', end)
+    // // Get today's date in yyyy-mm-dd format
     const today = new Date();
-    const isToday = start.toDateString() === today.toDateString();
+    const todayString = today.toISOString().split('T')[0]; // "2025-01-22"
 
+    // // Get start date in yyyy-mm-dd format
+    const startString = start.split('T')[0]; // "2025-01-22"
+
+    // // Check if both dates are the same
+    const isTodayDate = startString === todayString;
+    console.log('isTodayDate', isTodayDate)
+    // console.log('Is Start Date Today?', isToday);
+
+    // const todayDate = new Date();
+    // const isTodayDate = start.toDateString() === todayDate.toDateString();
+    // const isTodayDate = true;
+    let attendanceData;
+    // console.log('start', startTime, 'today', endTime)
+    // console.log(isTodayDate, startString, todayString)
     const labours = await db.labour.findMany({
       select: {
         employeeNo: true,
@@ -333,12 +352,17 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
       return acc;
     }, {});
 
-    if (isToday) {
+    if (isTodayDate) {
+      console.log('isToday', isTodayDate)
       console.log('START TIME', startTime);
-      console.log('END TIME', endTime);
+      // console.log('END TIME', endTime);
 
       const currentTime = new Date();
-      const twoHoursAgo = new Date(currentTime.getTime() - 4 * 60 * 60 * 1000);
+      const thirtyMinutesAgo = new Date(currentTime.getTime() - 30 * 60 * 1000);
+      // console.log('THIRTY MINUTES AGO', thirtyMinutesAgo, thirtyMinutesAgo.toDateString());
+      const thirtyMinutesAgoFormatted = formatTimeInIndianTimezone(thirtyMinutesAgo);
+      // console.log('THIRTY MINUTES AGO FORMATTED', thirtyMinutesAgoFormatted);
+      const twoHoursAgo = new Date(currentTime.getTime() - 1 * 60 * 60 * 1000);
 
       const timezoneOffset = '+05:30'; // Replace with your desired timezone offset
       const year = twoHoursAgo.getFullYear();
@@ -352,13 +376,14 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
       startTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${timezoneOffset}`;
 
       console.log('UPDATED START TIME', startTime);
-
+      console.log('UPDATED END TIME', endTime);
       const cameraApiBody = {
         AcsEventCond: {
           searchID: Math.random().toString(36).substring(2, 15),
           searchResultPosition: 0,
-          maxResults: 500,
-          startTime: startTime,
+          maxResults: 100,
+          startTime: thirtyMinutesAgoFormatted,
+          // startTime: "2025-01-22T17:28:51+05:30",
           endTime: endTime,
         },
       };
@@ -370,17 +395,19 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
         headers: { 'Content-Type': 'application/json' },
       });
 
+      console.log('CAMERA RESPONSE', cameraResponse.data);
+
       if (cameraResponse.status !== 200) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to fetch attendance from camera system');
       }
 
-      console.log('CAMERA RESPONSE', cameraResponse.data?.AcsEvent?.InfoList);
+      // console.log('CAMERA RESPONSE', cameraResponse.data?.AcsEvent?.InfoList);
 
       const filteredInfoList = (cameraResponse.data?.AcsEvent?.InfoList || []).filter((record) => {
         return labours.some((labour) => labour.employeeNo === record.employeeNoString);
       });
 
-      console.log('FILTERED INFO LIST', filteredInfoList);
+      // console.log('FILTERED INFO LIST', filteredInfoList);
 
       const employeeEntriesByDate = filteredInfoList.reduce((acc, entry) => {
         const date = new Date(entry.time).toISOString().split('T')[0];
@@ -399,6 +426,8 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
         const employeesForDate = employeeEntriesByDate[date];
         attendanceData[date] = [];
 
+        // console.log('EMPLOYEES FOR DATE', employeesForDate);
+
         for (const employeeNo in employeesForDate) {
           const entries = employeesForDate[employeeNo];
           if (entries.length > 0) {
@@ -412,6 +441,7 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
             const workingHours = ((outTimeDate - inTimeDate) / (1000 * 60 * 60)).toFixed(2);
 
             const photos = employeeNoToPhotosMap[employeeNo] || [];
+            // console.log("entries length", entries.length)
 
             attendanceData[date].push({
               labourId: employeeNo,
@@ -422,6 +452,7 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
               employeeNo: employeeNo,
               name: entries[0].name || 'Unknown',
               photos: photos,
+      
             });
           }
         }
@@ -468,33 +499,36 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
           },
         },
       });
+      // console.log('DB RECORDS', dbRecords);
 
       attendanceData = dbRecords.reduce((acc, record) => {
+        // console.log('RECORD', record);
         const date = new Date(record.date).toISOString().split('T')[0];
         if (!acc[date]) {
           acc[date] = [];
         }
-
         const inTime = new Date(record.inTime);
         const outTime = new Date(record.outTime);
         const workingHours = ((outTime - inTime) / (1000 * 60 * 60)).toFixed(2);
-
+        // console.log('contractor details', record.labour.contractor.user.name, record.labour.contractor.user.id);
         acc[date].push({
           labourId: record.labourId,
           inTime: record.inTime,
           outTime: record.outTime,
           workingHours: parseFloat(workingHours),
-          status: record.status || 'PRESENT',
+          status: record.status || 'ABSENT',
           employeeNo: record.labour.employeeNo,
           name: record.labour.user.name,
           contractorId: record.labour.contractor.id,
-          contractorName: record.labour.contractor.user.name,
+          contractorName: record.labour.contractor.user?.name || 'Unknown',
           photos: record.labour.photos,
         });
 
         return acc;
       }, {});
     }
+
+    // console.log('ATTENDANCE DATA v2', attendanceData);
 
     const uniqueRecords = [];
     const seenLabourIds = new Set();
@@ -551,7 +585,7 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
       { field: 'workingHours', headerName: 'Working Hours', width: 150 },
       { field: 'date', headerName: 'Date', width: 150 },
     ];
-
+    // console.log('ATTENDANCE DATA final', attendanceData);
     return {
       data: attendanceData,
       summary,
@@ -567,6 +601,267 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
   }
 };
 
+// 1. Get Labours with optional contractor filter
+const getDLabours = async (contractorId = null) => {
+  try {
+    return await db.labour.findMany({
+      where: contractorId ? { contractorId: parseInt(contractorId, 10) } : {},
+      include: {
+        user: {
+          select: {
+            name: true,
+            username: true,
+            mobile_number: true,
+          },
+        },
+        contractor: {
+          include: {
+            user: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+        photos: true,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching labours:', error);
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to fetch labours');
+  }
+};
+
+// 2. Get Attendance records for a specific date
+const getDAttendance = async (date) => {
+  try {
+    const queryDate = new Date(date);
+    return await db.attendance.findMany({
+      where: {
+        date: {
+          gte: new Date(queryDate.setHours(0, 0, 0, 0)),
+          lte: new Date(queryDate.setHours(23, 59, 59, 999)),
+        },
+      },
+      include: {
+        labour: {
+          select: {
+            employeeNo: true,
+          },
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching attendance:', error);
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to fetch attendance records');
+  }
+};
+
+// 3. Get Contractors list
+const getDContractors = async () => {
+  try {
+    return await db.contractor.findMany({
+      include: {
+        user: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching contractors:', error);
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to fetch contractors');
+  }
+};
+
+// Helper function to format time in camera's required format
+const formatCameraTime = () => {
+  const currentTime = timeUtils.getCurrentTime();
+  // console.log('CURRENT TIME', currentTime);
+  const thirtyMinutesAgo = currentTime.subtract(30, 'minutes');
+  // console.log('THIRTY MINUTES AGO', thirtyMinutesAgo);
+  return thirtyMinutesAgo.format('YYYY-MM-DDTHH:mm:ss+05:30');
+};
+
+// Modified camera result function to use the simplified formatCameraTime
+const getDCameraResult = async () => {
+  try {
+    const formattedStartTime = formatCameraTime();
+    console.log('Fetching camera data from:', formattedStartTime);
+    
+    const response = await digestAuth.request({
+      method: 'POST',
+      url: `${BASE_URL}/ISAPI/AccessControl/AcsEvent?format=json&devIndex=${DEV_INDEX}`,
+      data: {
+        AcsEventCond: {
+          searchID: Math.random().toString(36).substring(2, 15),
+          searchResultPosition: 0,
+          maxResults: 100,
+          startTime: formattedStartTime,
+        },
+      },
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (response.status !== 200) {
+      throw new Error('Failed to fetch camera data');
+    }
+
+    return response.data?.AcsEvent?.InfoList || [];
+  } catch (error) {
+    console.error('Error fetching camera results:', error);
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to fetch camera data');
+  }
+};
+
+const getDailyAttendance = async (startDate, contractorId = null) => {
+  try {
+    const queryDate = startDate ? timeUtils.formatToIST(startDate) : timeUtils.getCurrentTime();
+    console.log('QUERY DATE', queryDate);
+    const queryDateString = timeUtils.formatDateOnly(queryDate);
+    console.log('QUERY DATE STRING', queryDateString);
+    // Get all required data
+    const [labours, attendanceRecords] = await Promise.all([
+      getDLabours(contractorId),
+      getDAttendance(queryDateString),
+    ]);
+
+    const today = new Date();
+    const isToday = queryDateString === timeUtils.formatDateOnly(today);
+    
+    if (!isToday) {
+      // ... existing historical data processing ...
+    }
+
+    // Process today's attendance
+    let cameraData = await getDCameraResult();
+    console.log('Camera data entries:', cameraData.length);
+    
+    // Create attendance map for quick lookup
+    const attendanceMap = new Map(
+      attendanceRecords.map(record => [record.labourId, record])
+    );
+
+    // Process each labour
+    const processedRecords = await Promise.all(labours.map(async (labour) => {
+      // Find camera records for this labour
+      const cameraRecords = cameraData.filter(
+        record => record.employeeNoString === labour.employeeNo
+      );
+
+      let attendanceRecord = attendanceMap.get(labour.id);
+      let inTime = attendanceRecord?.inTime || null;
+      let outTime = attendanceRecord?.outTime || null;
+
+      // Process camera records if found
+      if (cameraRecords.length > 0) {
+        // Sort camera records by time
+        cameraRecords.sort((a, b) => new Date(a.time) - new Date(b.time));
+        const latestCameraTime = new Date(cameraRecords[cameraRecords.length - 1].time);
+
+        if (!attendanceRecord) {
+          // Case 1: No attendance record exists - create new
+          attendanceRecord = await db.attendance.create({
+            data: {
+              labourId: labour.id,
+              date: new Date(queryDateString),
+              inTime: new Date(cameraRecords[0].time),
+              outTime: latestCameraTime,
+              workingHours: (latestCameraTime - new Date(cameraRecords[0].time)) / (1000 * 60 * 60),
+            },
+          });
+        } else {
+          // Case 2: Attendance record exists
+          if (!inTime) {
+            // Case 2a: No inTime - update both inTime and outTime
+            await db.attendance.update({
+              where: { id: attendanceRecord.id },
+              data: {
+                inTime: new Date(cameraRecords[0].time),
+                outTime: latestCameraTime,
+                workingHours: (latestCameraTime - new Date(inTime)) / (1000 * 60 * 60),
+              },
+            });
+          } else if (latestCameraTime > new Date(outTime)) {
+            // Case 2b: Update outTime if camera time is later
+            await db.attendance.update({
+              where: { id: attendanceRecord.id },
+              data: {
+                outTime: latestCameraTime,
+                workingHours: (latestCameraTime - new Date(inTime)) / (1000 * 60 * 60),
+              },
+            });
+          }
+        }
+      }
+
+      // Get final attendance record after updates
+      const finalRecord = attendanceRecord || await db.attendance.findUnique({
+        where: {
+          labourId_date: {
+            labourId: labour.id,
+            date: new Date(queryDateString),
+          },
+        },
+      });
+
+      // Calculate final working hours
+      let workingHours = 0;
+      if (finalRecord?.inTime && finalRecord?.outTime) {
+        workingHours = (new Date(finalRecord.outTime) - new Date(finalRecord.inTime)) / (1000 * 60 * 60);
+      }
+
+      return {
+        labourId: labour.id,
+        employeeNo: labour.employeeNo,
+        name: labour.user.name,
+        inTime: timeUtils.formatTimeOnly(finalRecord?.inTime),
+        outTime: timeUtils.formatTimeOnly(finalRecord?.outTime),
+        workingHours: parseFloat(workingHours.toFixed(2)),
+        contractorId: labour.contractor?.id || null,
+        contractorName: labour.contractor?.user?.name || 'N/A',
+        status: finalRecord?.inTime ? 'PRESENT' : 'ABSENT',
+        photoUrl: labour.photos?.[0]?.url || null,
+        date: queryDateString,
+      };
+    }));
+
+    // Calculate summary
+    const summary = processedRecords.reduce(
+      (acc, record) => ({
+        totalWorkingHours: acc.totalWorkingHours + (record.workingHours || 0),
+        totalRecords: acc.totalRecords + 1,
+        presentCount: acc.presentCount + (record.status === 'PRESENT' ? 1 : 0),
+        absentCount: acc.absentCount + (record.status === 'ABSENT' ? 1 : 0),
+      }),
+      { totalWorkingHours: 0, totalRecords: 0, presentCount: 0, absentCount: 0 }
+    );
+
+    return {
+      summary: {
+        totalWorkingHours: parseFloat(summary.totalWorkingHours.toFixed(2)).toString(),
+        totalRecords: summary.totalRecords.toString(),
+        presentCount: summary.presentCount.toString(),
+        absentCount: summary.absentCount.toString(),
+      },
+      data: processedRecords
+    };
+
+  } catch (error) {
+    console.error('Error in getDailyAttendance:', error);
+    throw new ApiError(
+      error.statusCode || httpStatus.BAD_REQUEST,
+      'Failed to fetch daily attendance: ' + error.message
+    );
+  }
+};
+
+const formatResultTime = (time) => {
+  if (!time) return null;
+  return timeUtils.formatTimeOnly(time);
+};
+
 const getLastAccessTime = (infoList, employeeNo) => {
   const employeeRecords = infoList.filter((record) => record.employeeNoString === employeeNo);
   if (employeeRecords.length === 0) return null;
@@ -575,10 +870,10 @@ const getLastAccessTime = (infoList, employeeNo) => {
 };
 
 const getTodayDateRange = () => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = timeUtils.getCurrentTime();
   return {
-    startDate: `${today}T00:01:04+05:30`,
-    endDate: `${today}T23:59:04+05:30`,
+    startDate: today.startOf('day').format('YYYY-MM-DDTHH:mm:ss+05:30'),
+    endDate: today.endOf('day').format('YYYY-MM-DDTHH:mm:ss+05:30'),
   };
 };
 
@@ -596,6 +891,231 @@ const formatDateForCamera = (date) => {
   return new Date(date).toISOString().replace('Z', '+05:30');
 };
 
+const formatTimeInIndianTimezone = (date) => {
+  return timeUtils.formatToIST(date).format('YYYY-MM-DDTHH:mm:ss+05:30');
+};
+
+const fillDataInDb = async () => {
+  try {
+    const startDateTime = new Date('2025-01-23T13:00:00+05:30');
+    const endDateTime = new Date('2025-01-23T21:00:00+05:30');
+    
+    // Get all labours for reference
+    const labours = await db.labour.findMany({
+      select: {
+        id: true,
+        employeeNo: true,
+      },
+    });
+
+    const employeeNoToLabourId = labours.reduce((acc, labour) => {
+      acc[labour.employeeNo] = labour.id;
+      return acc;
+    }, {});
+
+    // Process data in 30-minute intervals
+    let currentStartTime = startDateTime;
+    
+    while (currentStartTime < endDateTime) {
+      const intervalEndTime = new Date(currentStartTime.getTime() + 30 * 60 * 1000);
+      
+      console.log(`Fetching data from ${currentStartTime.toISOString()} to ${intervalEndTime.toISOString()}`);
+
+      // Call camera API
+      const cameraResponse = await digestAuth.request({
+        method: 'POST',
+        url: `${BASE_URL}/ISAPI/AccessControl/AcsEvent?format=json&devIndex=${DEV_INDEX}`,
+        data: {
+          AcsEventCond: {
+            searchID: Math.random().toString(36).substring(2, 15),
+            searchResultPosition: 0,
+            maxResults: 100,
+            startTime: formatTimeInIndianTimezone(currentStartTime),
+            endTime: formatTimeInIndianTimezone(intervalEndTime),
+          },
+        },
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (cameraResponse.data?.AcsEvent?.InfoList) {
+        // Group entries by employeeNo
+        const entriesByEmployee = cameraResponse.data.AcsEvent.InfoList.reduce((acc, entry) => {
+          if (!acc[entry.employeeNoString]) {
+            acc[entry.employeeNoString] = [];
+          }
+          acc[entry.employeeNoString].push(entry);
+          return acc;
+        }, {});
+
+        // Process each employee's entries
+        for (const [employeeNo, entries] of Object.entries(entriesByEmployee)) {
+          const labourId = employeeNoToLabourId[employeeNo];
+          if (!labourId) continue; // Skip if labour not found in our system
+
+          // Sort entries by time
+          entries.sort((a, b) => new Date(a.time) - new Date(b.time));
+          
+          const entryDate = timeUtils.formatToIST(entries[0].time);
+          const dateString = timeUtils.formatDateOnly(entryDate);
+
+          // Try to find existing attendance record
+          const existingRecord = await db.attendance.findUnique({
+            where: {
+              labourId_date: {
+                labourId: labourId,
+                date: new Date(dateString),
+              },
+            },
+          });
+
+          if (existingRecord) {
+            // Update existing record if new outTime is later
+            const latestTime = timeUtils.formatToIST(entries[entries.length - 1].time);
+            const existingOutTime = timeUtils.formatToIST(existingRecord.outTime);
+
+            if (latestTime > existingOutTime) {
+              const updatedWorkingHours = 
+                (latestTime - timeUtils.formatToIST(existingRecord.inTime)) / (1000 * 60 * 60);
+
+              await db.attendance.update({
+                where: {
+                  id: existingRecord.id,
+                },
+                data: {
+                  outTime: latestTime,
+                  workingHours: parseFloat(updatedWorkingHours.toFixed(2)),
+                },
+              });
+            }
+          } else {
+            // Create new record
+            const inTime = timeUtils.formatToIST(entries[0].time);
+            const outTime = timeUtils.formatToIST(entries[entries.length - 1].time);
+            const workingHours = (outTime - inTime) / (1000 * 60 * 60);
+
+            await db.attendance.create({
+              data: {
+                labourId: labourId,
+                date: new Date(dateString),
+                inTime: inTime,
+                outTime: outTime,
+                workingHours: parseFloat(workingHours.toFixed(2)),
+              },
+            });
+          }
+        }
+      }
+
+      // Move to next interval
+      currentStartTime = intervalEndTime;
+    }
+
+    console.log('Data fill completed successfully');
+    return { success: true, message: 'Data fill completed successfully' };
+
+  } catch (error) {
+    console.error('Error filling attendance data:', error);
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      'Failed to fill attendance data: ' + (error.response?.data?.message || error.message)
+    );
+  }
+};
+
+// const test = async () => {
+//   try {
+//     // Find labour by employeeNo
+//     const employeeNo = 'LAB23';
+//     const date = '2025-01-22';
+//     const labour = await db.labour.findFirst({
+//       where: {
+//         employeeNo: employeeNo,
+//       },
+//       include: {
+//         user: {
+//           select: {
+//             id: true,
+//             name: true,
+//             username: true,
+//             mobile_number: true,
+//           },
+//         },
+//         contractor: {
+//           include: {
+//             user: {
+//               select: {
+//                 name: true,
+//               },
+//             },
+//           },
+//         },
+//         photos: true,
+//       },
+//     });
+
+//     if (!labour) {
+//       throw new ApiError(httpStatus.NOT_FOUND, `No labour found with employee number: ${employeeNo}`);
+//     }
+
+//     console.log('Labour Details:', {
+//       id: labour.id,
+//       employeeNo: labour.employeeNo,
+//       name: labour.user.name,
+//       username: labour.user.username,
+//       mobile_number: labour.user.mobile_number,
+//       contractor: labour.contractor?.user?.name || 'Not Assigned',
+//       photoCount: labour.photos.length,
+//     });
+
+//     // Find attendance for the specified date
+//     const attendance = await db.attendance.findUnique({
+//       where: {
+//         labourId_date: {
+//           labourId: labour.id,
+//           date: new Date(date),
+//         },
+//       },
+//     });
+
+//     const response = {
+//       labour: {
+//         id: labour.id,
+//         employeeNo: labour.employeeNo,
+//         name: labour.user.name,
+//         username: labour.user.username,
+//         mobile_number: labour.user.mobile_number,
+//         contractor: labour.contractor?.user?.name || 'Not Assigned',
+//         photos: labour.photos,
+//       },
+//       attendance: attendance ? {
+//         date: attendance.date,
+//         inTime: attendance.inTime,
+//         outTime: attendance.outTime,
+//         workingHours: attendance.workingHours,
+//         status: attendance.outTime ? 'PRESENT' : 'ABSENT',
+//       } : {
+//         date: new Date(date),
+//         status: 'NO_RECORD',
+//       },
+//     };
+
+//     console.log('Response:', JSON.stringify(response, null, 2));
+//     return response;
+
+//   } catch (error) {
+//     console.error('Error in test function:', error);
+//     throw new ApiError(
+//       error.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
+//       error.message || 'An error occurred while fetching labour details'
+//     );
+//   }
+// };
+const test = async () => {
+  const formattedTime = formatCameraTime();
+  console.log('Formatted Time:', formattedTime);
+  // await fillDataInDb();
+  console.log('test');
+};
 const cameraService = {
   addFacePicturesToCamera,
   deleteUserFromCamera,
@@ -604,6 +1124,10 @@ const cameraService = {
   addUserToCamera,
   searchUserInCamera,
   getAttendanceRecords,
+  getDailyAttendance,
+  fillDataInDb,
+  test,
+  getDCameraResult
 };
 
 module.exports = cameraService;

@@ -3,6 +3,7 @@ const db = require('../database/prisma');
 const ApiError = require('../utils/ApiError');
 const cameraService = require('./camera.service');
 const { calculateDaysDifference } = require('../utils/dateUtils');
+const timeUtils = require('../utils/timeUtils');
 
 /**
  * Handler to fetch labour attendance report with startDate and endDate filters.
@@ -447,10 +448,282 @@ const fetchContractorLabourReportHandler = async (filters = {}) => {
   };
 };
 
+const fetchDailyReportHandler = async (filters) => {
+  try {
+    const { startDate, contractorId } = filters;
+    const queryDate = timeUtils.formatToIST(startDate);
+    const queryDateString = timeUtils.formatDateOnly(queryDate);
+
+    // For database queries
+    const dayStart = timeUtils.getStartOfDay(queryDate);
+    const dayEnd = timeUtils.getEndOfDay(queryDate);
+
+    // Get all labours with their contractor info
+    const labours = await db.labour.findMany({
+      where: contractorId ? {
+        contractorId: parseInt(contractorId, 10)
+      } : {},
+      include: {
+        user: {
+          select: {
+            name: true,
+          },
+        },
+        contractor: {
+          include: {
+            user: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Get attendance records for the specified date
+    const attendanceRecords = await db.attendance.findMany({
+      where: {
+        date: {
+          gte: dayStart,
+          lte: dayEnd,
+        },
+        ...(contractorId && {
+          labour: {
+            contractorId: parseInt(contractorId, 10),
+          },
+        }),
+      },
+    });
+
+    // Create attendance map for quick lookup
+    const attendanceMap = new Map(
+      attendanceRecords.map(record => [record.labourId, record])
+    );
+
+    // Process each labour and their attendance
+    const processedRecords = labours.map(labour => {
+      const attendanceRecord = attendanceMap.get(labour.id);
+      
+      // Calculate working hours if attendance exists
+      let workingHours = 0;
+      if (attendanceRecord?.inTime && attendanceRecord?.outTime) {
+        workingHours = (new Date(attendanceRecord.outTime) - new Date(attendanceRecord.inTime)) / (1000 * 60 * 60);
+      }
+
+      return {
+        labourId: labour.id,
+        employeeNo: labour.employeeNo,
+        name: labour.user.name,
+        contractorId: labour.contractor?.id || '-',
+        contractorName: labour.contractor?.user?.name || '',
+        inTime: timeUtils.formatTimeOnly(attendanceRecord?.inTime) || null,
+        outTime: timeUtils.formatTimeOnly(attendanceRecord?.outTime) || null,
+        hours: parseFloat(workingHours.toFixed(2)),
+        date: queryDateString,
+      };
+    });
+
+    // Calculate summary
+    const summary = processedRecords.reduce(
+      (acc, record) => ({
+        totalHours: acc.totalHours + (record.hours || 0),
+        totalLabours: acc.totalLabours + 1,
+        presentCount: acc.presentCount + (record.inTime ? 1 : 0),
+        absentCount: acc.absentCount + (record.inTime ? 0 : 1),
+      }),
+      { totalHours: 0, totalLabours: 0, presentCount: 0, absentCount: 0 }
+    );
+    return {
+      summary: {
+        totalHours: parseFloat(summary.totalHours.toFixed(2)).toString(),
+        totalLabours: summary.totalLabours,
+        totalRecords: processedRecords.length,
+      },
+      data: processedRecords,
+      columns: [
+        { field: 'labourId', headerName: 'Labour ID', width: 100 },
+        { field: 'employeeNo', headerName: 'Employee No', width: 150 },
+        { field: 'name', headerName: 'Name', width: 150 },
+        { field: 'contractorId', headerName: 'Contractor ID', width: 150 },
+        { field: 'contractorName', headerName: 'Contractor Name', width: 150 },
+        { field: 'inTime', headerName: 'In Time', width: 150 },
+        { field: 'outTime', headerName: 'Out Time', width: 150 },
+        { field: 'hours', headerName: 'Hours', width: 150 },
+        { field: 'date', headerName: 'Date', width: 150 },
+      ],
+    };
+  } catch (error) {
+    console.error('Error in fetchDailyReportHandler:', error);
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      'Failed to fetch daily report: ' + error.message
+    );
+  }
+};
+
+const fetchCustomReportHandler = async (filters) => {
+  try {
+    const { startDate, endDate, contractorId } = filters;
+    
+    if (!startDate || !endDate) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Both startDate and endDate are required');
+    }
+
+    const startDateTime = new Date(startDate + 'T00:00:00Z');
+    const endDateTime = new Date(endDate + 'T23:59:59Z');
+
+    // Get all labours with their contractor info
+    const labours = await db.labour.findMany({
+      where: contractorId ? {
+        contractorId: parseInt(contractorId, 10)
+      } : {},
+      include: {
+        user: {
+          select: {
+            name: true,
+          },
+        },
+        contractor: {
+          include: {
+            user: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Get attendance records for the date range
+    const attendanceRecords = await db.attendance.findMany({
+      where: {
+        date: {
+          gte: startDateTime,
+          lte: endDateTime,
+        },
+        ...(contractorId && {
+          labour: {
+            contractorId: parseInt(contractorId, 10),
+          },
+        }),
+      },
+    });
+
+    // Create attendance map for quick lookup, grouped by date and labourId
+    const attendanceMap = new Map();
+    attendanceRecords.forEach(record => {
+      const dateString = record.date.toISOString().split('T')[0];
+      if (!attendanceMap.has(dateString)) {
+        attendanceMap.set(dateString, new Map());
+      }
+      attendanceMap.get(dateString).set(record.labourId, record);
+    });
+
+    // Generate array of dates in the range
+    const dateRange = [];
+    let currentDate = new Date(startDateTime);
+    while (currentDate <= endDateTime) {
+      dateRange.push(currentDate.toISOString().split('T')[0]);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Process each labour for each date
+    const processedRecords = [];
+    labours.forEach(labour => {
+      dateRange.forEach(date => {
+        const attendanceRecord = attendanceMap.get(date)?.get(labour.id);
+        
+        // Calculate working hours if attendance exists
+        let workingHours = 0;
+        if (attendanceRecord?.inTime && attendanceRecord?.outTime) {
+          workingHours = (new Date(attendanceRecord.outTime) - new Date(attendanceRecord.inTime)) / (1000 * 60 * 60);
+        }
+
+        processedRecords.push({
+          labourId: labour.id,
+          employeeNo: labour.employeeNo,
+          name: labour.user.name,
+          contractorId: labour.contractor?.id || 0,
+          contractorName: labour.contractor?.user?.name || '',
+          inTime: timeUtils.formatTimeOnly(attendanceRecord?.inTime) || null,
+          outTime: timeUtils.formatTimeOnly(attendanceRecord?.outTime) || null,
+          hours: parseFloat(workingHours.toFixed(2)),
+          date: date,
+        });
+      });
+    });
+
+    // Calculate summary
+  
+    const summary = processedRecords.reduce(
+      (acc, record) => ({
+        totalHours: acc.totalHours + (record.hours || 0),
+        totalLabours: acc.totalLabours + (record.date === dateRange[0] ? 1 : 0), // Count unique labours only once
+        presentCount: acc.presentCount + (record.inTime ? 1 : 0),
+        absentCount: acc.absentCount + (record.inTime ? 0 : 1),
+        totalDays: dateRange.length
+      }),
+      { totalHours: 0, totalLabours: 0, presentCount: 0, absentCount: 0, totalDays: 0 }
+    );
+
+    return {
+      summary: {
+        totalHours: parseFloat(summary.totalHours.toFixed(2)).toString(),
+        totalLabours: summary.totalLabours,
+        totalRecords: processedRecords.length,
+        totalDays: summary.totalDays,
+        averageHoursPerDay: parseFloat((summary.totalHours / summary.totalDays).toFixed(2)),
+      },
+      data: processedRecords,
+      columns: [
+        { field: 'labourId', headerName: 'Labour ID', width: 100 },
+        { field: 'employeeNo', headerName: 'Employee No', width: 150 },
+        { field: 'name', headerName: 'Name', width: 150 },
+        { field: 'contractorId', headerName: 'Contractor ID', width: 150 },
+        { field: 'contractorName', headerName: 'Contractor Name', width: 150 },
+        { field: 'inTime', headerName: 'In Time', width: 150 },
+        { field: 'outTime', headerName: 'Out Time', width: 150 },
+        { field: 'hours', headerName: 'Hours', width: 150 },
+        { field: 'date', headerName: 'Date', width: 150 },
+      ],
+    };
+
+  } catch (error) {
+    console.error('Error in fetchCustomReportHandler:', error);
+    throw new ApiError(
+      error.statusCode || httpStatus.BAD_REQUEST,
+      'Failed to fetch custom report: ' + error.message
+    );
+  }
+};
+
+const fetchContractorReport = async (filters) => {
+  const { startDate, endDate, contractorId} = filters;
+  const report = await fetchDailyReportHandler({ startDate, endDate, labourId });
+  return report;
+};
+
+
+const formatResultTime = (time) => {
+  if (!time) return null;
+  const options = {
+    timeZone: 'Asia/Kolkata',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false, // Use 24-hour format
+  };
+  return new Date(time).toLocaleString('en-US', options);
+};
+
 const reportService = {
   fetchLabourReportHandler,
   fetchLabourReportByIdHandler,
   fetchContractorLabourReportHandler,
+  fetchDailyReportHandler,
+  fetchCustomReportHandler,
 };
 
 module.exports = reportService;

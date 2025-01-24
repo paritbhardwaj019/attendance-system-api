@@ -31,6 +31,12 @@ const getLabourAttendance = catchAsync(async (req, res) => {
     .json(ApiResponse.success(httpStatus.OK, 'Labour attendance records retrieved successfully', attendance));
 });
 
+const fetchAndStoreAttendance = catchAsync(async (req, res) => {
+  const attendance = await attendanceService.fetchAndStoreAttendance();
+  res
+    .status(httpStatus.OK)
+    .json(ApiResponse.success(httpStatus.OK, 'Attendance fetched and stored successfully', attendance));
+});
 // const getAttendanceReport = catchAsync(async (req, res) => {
 //   const { startDate, endDate, view = 'daily' } = req.query;
 
@@ -54,6 +60,7 @@ const attendanceController = {
   recordAttendance,
   getAttendance,
   getLabourAttendance,
+  fetchAndStoreAttendance
   // getAttendanceReport,
 };
 

@@ -6,18 +6,7 @@ const db = require('./database/prisma');
 
 let server;
 
-db.$connect()
-  .then(async () => {
-    logger.info('Connected to MySQL database');
 
-    server = app.listen(config.port, () => {
-      logger.info(`Listening to port ${config.port}`);
-    });
-  })
-  .catch((error) => {
-    logger.error('Failed to connect to the database', error);
-    process.exit(1);
-  });
 
 const exitHandler = () => {
   if (server) {
@@ -52,3 +41,16 @@ process.on('SIGTERM', () => {
     db.$disconnect();
   }
 });
+
+db.$connect()
+  .then(async () => {
+    logger.info('Connected to MySQL database');
+
+    server = app.listen(config.port, () => {
+      logger.info(`Listening to port ${config.port}`);
+    });
+  })
+  .catch((error) => {
+    logger.error('Failed to connect to the database', error);
+    process.exit(1);
+  });

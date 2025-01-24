@@ -43,7 +43,7 @@ const getAttendance = catchAsync(async (req, res) => {
   const contractorId = req.query.contractorId || null;
 
   const attendanceResults = await cameraService.getAttendanceRecords(startDate, endDate, contractorId);
-
+  // console.log('ATTENDANCE RESULTS length', attendanceResults.data)
   res.status(httpStatus.OK).json(
     ApiResponse.success(httpStatus.OK, 'Attendance records retrieved successfully', {
       results: attendanceResults.data,
@@ -55,7 +55,34 @@ const getAttendance = catchAsync(async (req, res) => {
   );
 });
 
+const getDailyAttendance = catchAsync(async (req, res) => {
+  const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
+  const contractorId = req.query.contractorId || null;
+  console.log('START DATE in controller', startDate);
+  const dailyAttendance = await cameraService.getDailyAttendance(startDate, contractorId);
+
+  res.status(httpStatus.OK).json(
+    ApiResponse.success(httpStatus.OK, 'Daily attendance retrieved successfully', {
+      results: dailyAttendance,
+    })
+  );
+});
+
+const fillDataInDb = catchAsync(async (req, res) => {
+  await cameraService.fillDataInDb();
+  res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Data filled in database successfully'));
+});
+
+const test = catchAsync(async (req, res) => {
+  await cameraService.test();
+
+  res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Test completed successfully'));
+});
+
 module.exports = {
   searchUser,
   getAttendance,
+  getDailyAttendance,
+  fillDataInDb,
+  test,
 };

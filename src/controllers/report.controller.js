@@ -3,6 +3,7 @@ const reportService = require('../services/report.service');
 const catchAsync = require('../utils/catchAsync');
 const ApiResponse = require('../utils/ApiResponse');
 const pick = require('../utils/pick');
+const ApiError = require('../utils/ApiError');
 
 /**
  * Handler to fetch labour attendance report with filters.
@@ -40,10 +41,37 @@ const getContractorLabourReport = catchAsync(async (req, res) => {
     .json(ApiResponse.success(httpStatus.OK, 'Contractor labour report retrieved successfully', report));
 });
 
+const getDailyReport = catchAsync(async (req, res) => {
+  // Only pick startDate and optional contractorId
+  const filters = pick(req.query, ['startDate', 'contractorId']);
+  
+  // Validate required startDate
+  if (!filters.startDate) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'startDate is required');
+  }
+
+  const report = await reportService.fetchDailyReportHandler(filters);
+  res.status(httpStatus.OK).json(
+    ApiResponse.success(
+      httpStatus.OK, 
+      'Daily report retrieved successfully', 
+      report
+    )
+  );
+});
+
+const getCustomReport = catchAsync(async (req, res) => {
+  const filters = pick(req.query, ['startDate', 'endDate', 'contractorId']);
+  const report = await reportService.fetchCustomReportHandler(filters);
+  res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Custom report retrieved successfully', report));
+});
+
 const reportController = {
   getLabourReport,
   getLabourReportById,
   getContractorLabourReport,
+  getDailyReport,
+  getCustomReport,
 };
 
 module.exports = reportController;
