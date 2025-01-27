@@ -90,28 +90,30 @@ model Manager {
 }
 
 model Contractor {
-  id         Int     @id @default(autoincrement())
-  user       User    @relation(fields: [userId], references: [id])
-  userId     Int     @unique
-  firm_name  String?
+  id           Int        @id @default(autoincrement())
+  user         User       @relation(fields: [userId], references: [id])
+  userId       Int        @unique
+  firm_name    String?
 
-  employeeNo    String  @unique 
-
-  manager    Manager? @relation("ManagerContractors", fields: [managerId], references: [id])
-  managerId  Int?
-
-  createdBy      User     @relation("ContractorCreatedBy", fields: [createdById], references: [id])
-  createdById    Int
-  updatedBy      User     @relation("ContractorUpdatedBy", fields: [updatedById], references: [id])
-  updatedById    Int
-
-  labour     Labour[]
-  aadhar_number String  @unique
-  photos     ContractorPhoto[]
-  pdfs       ContractorPDF[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  employeeNo   String     @unique
+  manager      Manager?   @relation("ManagerContractors", fields: [managerId], references: [id])
+  managerId    Int?
+  
+  createdBy    User       @relation("ContractorCreatedBy", fields: [createdById], references: [id])
+  createdById  Int
+  
+  updatedBy    User       @relation("ContractorUpdatedBy", fields: [updatedById], references: [id])
+  updatedById  Int
+  
+  labour       Labour[]
+  aadhar_number String    @unique
+  photos       ContractorPhoto[]
+  pdfs         ContractorPDF[]
+  startDate    DateTime?  
+  endDate      DateTime?  
+  siteCode     String?    
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 }
 
 model ContractorPhoto {

@@ -304,24 +304,24 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
 
     if (!startDate || !endDate) {
       const todayRange = getTodayDateRange();
-      console.log('todayRange', todayRange)
+      console.log('todayRange', todayRange);
       startTime = todayRange.startDate;
       endTime = todayRange.endDate;
     } else {
       const formattedStartDate = formatDateForCamera(startDate);
       const formattedEndDate = formatDateForCamera(endDate);
-      console.log('formattedStartDate', formattedStartDate)
+      console.log('formattedStartDate', formattedStartDate);
       startTime = typeof formattedStartDate === 'object' ? formattedStartDate.startTime : formattedStartDate;
       endTime = typeof formattedEndDate === 'object' ? formattedEndDate.endTime : formattedEndDate;
 
-      console.log('startTime', startTime)
-      console.log('endTime', endTime)
+      console.log('startTime', startTime);
+      console.log('endTime', endTime);
     }
 
     const start = formatTimeInIndianTimezone(startTime);
     const end = formatTimeInIndianTimezone(endTime);
 
-    console.log('start', start, 'end', end)
+    console.log('start', start, 'end', end);
     // // Get today's date in yyyy-mm-dd format
     const today = new Date();
     const todayString = today.toISOString().split('T')[0]; // "2025-01-22"
@@ -331,7 +331,7 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
 
     // // Check if both dates are the same
     const isTodayDate = startString === todayString;
-    console.log('isTodayDate', isTodayDate)
+    console.log('isTodayDate', isTodayDate);
     // console.log('Is Start Date Today?', isToday);
 
     // const todayDate = new Date();
@@ -353,7 +353,7 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
     }, {});
 
     if (isTodayDate) {
-      console.log('isToday', isTodayDate)
+      console.log('isToday', isTodayDate);
       console.log('START TIME', startTime);
       // console.log('END TIME', endTime);
 
@@ -452,7 +452,6 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
               employeeNo: employeeNo,
               name: entries[0].name || 'Unknown',
               photos: photos,
-      
             });
           }
         }
@@ -689,7 +688,7 @@ const getDCameraResult = async () => {
   try {
     const formattedStartTime = formatCameraTime();
     console.log('Fetching camera data from:', formattedStartTime);
-    
+
     const response = await digestAuth.request({
       method: 'POST',
       url: `${BASE_URL}/ISAPI/AccessControl/AcsEvent?format=json&devIndex=${DEV_INDEX}`,
@@ -722,14 +721,11 @@ const getDailyAttendance = async (startDate, contractorId = null) => {
     const queryDateString = timeUtils.formatDateOnly(queryDate);
     console.log('QUERY DATE STRING', queryDateString);
     // Get all required data
-    const [labours, attendanceRecords] = await Promise.all([
-      getDLabours(contractorId),
-      getDAttendance(queryDateString),
-    ]);
+    const [labours, attendanceRecords] = await Promise.all([getDLabours(contractorId), getDAttendance(queryDateString)]);
 
     const today = new Date();
     const isToday = queryDateString === timeUtils.formatDateOnly(today);
-    
+
     if (!isToday) {
       // ... existing historical data processing ...
     }
@@ -737,95 +733,95 @@ const getDailyAttendance = async (startDate, contractorId = null) => {
     // Process today's attendance
     let cameraData = await getDCameraResult();
     console.log('Camera data entries:', cameraData.length);
-    
+
     // Create attendance map for quick lookup
-    const attendanceMap = new Map(
-      attendanceRecords.map(record => [record.labourId, record])
-    );
+    const attendanceMap = new Map(attendanceRecords.map((record) => [record.labourId, record]));
 
     // Process each labour
-    const processedRecords = await Promise.all(labours.map(async (labour) => {
-      // Find camera records for this labour
-      const cameraRecords = cameraData.filter(
-        record => record.employeeNoString === labour.employeeNo
-      );
+    const processedRecords = await Promise.all(
+      labours.map(async (labour) => {
+        // Find camera records for this labour
+        const cameraRecords = cameraData.filter((record) => record.employeeNoString === labour.employeeNo);
 
-      let attendanceRecord = attendanceMap.get(labour.id);
-      let inTime = attendanceRecord?.inTime || null;
-      let outTime = attendanceRecord?.outTime || null;
+        let attendanceRecord = attendanceMap.get(labour.id);
+        let inTime = attendanceRecord?.inTime || null;
+        let outTime = attendanceRecord?.outTime || null;
 
-      // Process camera records if found
-      if (cameraRecords.length > 0) {
-        // Sort camera records by time
-        cameraRecords.sort((a, b) => new Date(a.time) - new Date(b.time));
-        const latestCameraTime = new Date(cameraRecords[cameraRecords.length - 1].time);
+        // Process camera records if found
+        if (cameraRecords.length > 0) {
+          // Sort camera records by time
+          cameraRecords.sort((a, b) => new Date(a.time) - new Date(b.time));
+          const latestCameraTime = new Date(cameraRecords[cameraRecords.length - 1].time);
 
-        if (!attendanceRecord) {
-          // Case 1: No attendance record exists - create new
-          attendanceRecord = await db.attendance.create({
-            data: {
-              labourId: labour.id,
-              date: new Date(queryDateString),
-              inTime: new Date(cameraRecords[0].time),
-              outTime: latestCameraTime,
-              workingHours: (latestCameraTime - new Date(cameraRecords[0].time)) / (1000 * 60 * 60),
-            },
-          });
-        } else {
-          // Case 2: Attendance record exists
-          if (!inTime) {
-            // Case 2a: No inTime - update both inTime and outTime
-            await db.attendance.update({
-              where: { id: attendanceRecord.id },
+          if (!attendanceRecord) {
+            // Case 1: No attendance record exists - create new
+            attendanceRecord = await db.attendance.create({
               data: {
+                labourId: labour.id,
+                date: new Date(queryDateString),
                 inTime: new Date(cameraRecords[0].time),
                 outTime: latestCameraTime,
-                workingHours: (latestCameraTime - new Date(inTime)) / (1000 * 60 * 60),
+                workingHours: (latestCameraTime - new Date(cameraRecords[0].time)) / (1000 * 60 * 60),
               },
             });
-          } else if (latestCameraTime > new Date(outTime)) {
-            // Case 2b: Update outTime if camera time is later
-            await db.attendance.update({
-              where: { id: attendanceRecord.id },
-              data: {
-                outTime: latestCameraTime,
-                workingHours: (latestCameraTime - new Date(inTime)) / (1000 * 60 * 60),
-              },
-            });
+          } else {
+            // Case 2: Attendance record exists
+            if (!inTime) {
+              // Case 2a: No inTime - update both inTime and outTime
+              await db.attendance.update({
+                where: { id: attendanceRecord.id },
+                data: {
+                  inTime: new Date(cameraRecords[0].time),
+                  outTime: latestCameraTime,
+                  workingHours: (latestCameraTime - new Date(inTime)) / (1000 * 60 * 60),
+                },
+              });
+            } else if (latestCameraTime > new Date(outTime)) {
+              // Case 2b: Update outTime if camera time is later
+              await db.attendance.update({
+                where: { id: attendanceRecord.id },
+                data: {
+                  outTime: latestCameraTime,
+                  workingHours: (latestCameraTime - new Date(inTime)) / (1000 * 60 * 60),
+                },
+              });
+            }
           }
         }
-      }
 
-      // Get final attendance record after updates
-      const finalRecord = attendanceRecord || await db.attendance.findUnique({
-        where: {
-          labourId_date: {
-            labourId: labour.id,
-            date: new Date(queryDateString),
-          },
-        },
-      });
+        // Get final attendance record after updates
+        const finalRecord =
+          attendanceRecord ||
+          (await db.attendance.findUnique({
+            where: {
+              labourId_date: {
+                labourId: labour.id,
+                date: new Date(queryDateString),
+              },
+            },
+          }));
 
-      // Calculate final working hours
-      let workingHours = 0;
-      if (finalRecord?.inTime && finalRecord?.outTime) {
-        workingHours = (new Date(finalRecord.outTime) - new Date(finalRecord.inTime)) / (1000 * 60 * 60);
-      }
+        // Calculate final working hours
+        let workingHours = 0;
+        if (finalRecord?.inTime && finalRecord?.outTime) {
+          workingHours = (new Date(finalRecord.outTime) - new Date(finalRecord.inTime)) / (1000 * 60 * 60);
+        }
 
-      return {
-        labourId: labour.id,
-        employeeNo: labour.employeeNo,
-        name: labour.user.name,
-        inTime: timeUtils.formatTimeOnly(finalRecord?.inTime),
-        outTime: timeUtils.formatTimeOnly(finalRecord?.outTime),
-        workingHours: parseFloat(workingHours.toFixed(2)),
-        contractorId: labour.contractor?.id || null,
-        contractorName: labour.contractor?.user?.name || 'N/A',
-        status: finalRecord?.inTime ? 'PRESENT' : 'ABSENT',
-        photoUrl: labour.photos?.[0]?.url || null,
-        date: queryDateString,
-      };
-    }));
+        return {
+          labourId: labour.id,
+          employeeNo: labour.employeeNo,
+          name: labour.user.name,
+          inTime: timeUtils.formatTimeOnly(finalRecord?.inTime),
+          outTime: timeUtils.formatTimeOnly(finalRecord?.outTime),
+          workingHours: parseFloat(workingHours.toFixed(2)),
+          contractorId: labour.contractor?.id || null,
+          contractorName: labour.contractor?.user?.name || 'N/A',
+          status: finalRecord?.inTime ? 'PRESENT' : 'ABSENT',
+          photoUrl: labour.photos?.[0]?.url || null,
+          date: queryDateString,
+        };
+      })
+    );
 
     // Calculate summary
     const summary = processedRecords.reduce(
@@ -845,15 +841,11 @@ const getDailyAttendance = async (startDate, contractorId = null) => {
         presentCount: summary.presentCount.toString(),
         absentCount: summary.absentCount.toString(),
       },
-      data: processedRecords
+      data: processedRecords,
     };
-
   } catch (error) {
     console.error('Error in getDailyAttendance:', error);
-    throw new ApiError(
-      error.statusCode || httpStatus.BAD_REQUEST,
-      'Failed to fetch daily attendance: ' + error.message
-    );
+    throw new ApiError(error.statusCode || httpStatus.BAD_REQUEST, 'Failed to fetch daily attendance: ' + error.message);
   }
 };
 
@@ -899,7 +891,7 @@ const fillDataInDb = async () => {
   try {
     const startDateTime = new Date('2025-01-23T13:00:00+05:30');
     const endDateTime = new Date('2025-01-23T21:00:00+05:30');
-    
+
     // Get all labours for reference
     const labours = await db.labour.findMany({
       select: {
@@ -915,10 +907,10 @@ const fillDataInDb = async () => {
 
     // Process data in 30-minute intervals
     let currentStartTime = startDateTime;
-    
+
     while (currentStartTime < endDateTime) {
       const intervalEndTime = new Date(currentStartTime.getTime() + 30 * 60 * 1000);
-      
+
       console.log(`Fetching data from ${currentStartTime.toISOString()} to ${intervalEndTime.toISOString()}`);
 
       // Call camera API
@@ -954,7 +946,7 @@ const fillDataInDb = async () => {
 
           // Sort entries by time
           entries.sort((a, b) => new Date(a.time) - new Date(b.time));
-          
+
           const entryDate = timeUtils.formatToIST(entries[0].time);
           const dateString = timeUtils.formatDateOnly(entryDate);
 
@@ -974,8 +966,7 @@ const fillDataInDb = async () => {
             const existingOutTime = timeUtils.formatToIST(existingRecord.outTime);
 
             if (latestTime > existingOutTime) {
-              const updatedWorkingHours = 
-                (latestTime - timeUtils.formatToIST(existingRecord.inTime)) / (1000 * 60 * 60);
+              const updatedWorkingHours = (latestTime - timeUtils.formatToIST(existingRecord.inTime)) / (1000 * 60 * 60);
 
               await db.attendance.update({
                 where: {
@@ -1012,7 +1003,6 @@ const fillDataInDb = async () => {
 
     console.log('Data fill completed successfully');
     return { success: true, message: 'Data fill completed successfully' };
-
   } catch (error) {
     console.error('Error filling attendance data:', error);
     throw new ApiError(
@@ -1127,7 +1117,7 @@ const cameraService = {
   getDailyAttendance,
   fillDataInDb,
   test,
-  getDCameraResult
+  getDCameraResult,
 };
 
 module.exports = cameraService;

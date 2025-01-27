@@ -117,6 +117,9 @@ const addContractorHandler = async (loggedInUser, contractorData, files) => {
           firm_name: contractorData.firm_name,
           employeeNo,
           aadhar_number: contractorData.aadhar_number,
+          startDate: contractorData.startDate,
+          endDate: contractorData.endDate,
+          siteCode: contractorData.siteCode,
           ...(managerId && { manager: { connect: { id: managerId } } }),
           createdBy: { connect: { id: loggedInUser.id } },
           updatedBy: { connect: { id: loggedInUser.id } },
@@ -580,6 +583,9 @@ const editContractorHandler = async (loggedInUser, contractorId, contractorData,
         data: {
           firm_name: contractorData.firm_name || existingContractor.firm_name,
           aadhar_number: contractorData.aadhar_number || existingContractor.aadhar_number,
+          startDate: contractorData.startDate || existingContractor.startDate, // New field
+          endDate: contractorData.endDate || existingContractor.endDate, // New field
+          siteCode: contractorData.siteCode || existingContractor.siteCode, // New field
           ...(managerId && { managerId }),
           updatedBy: { connect: { id: loggedInUser.id } },
         },

@@ -14,6 +14,8 @@ const { initializeAttendanceCron } = require('./services/attendance.service');
 const db = require('./database/prisma');
 // const { seedAll } = require('./data/seedData');
 
+require('./jobs/contractor.cron.job.js');
+
 const app = express();
 
 initializeAttendanceCron();
