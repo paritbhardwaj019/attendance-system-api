@@ -33,7 +33,7 @@ const generateQRCode = async (ticketId) => {
  * @param {number} userId
  * @returns {Object} Visitor registration details
  */
-const registerVisitor = async (visitorData, userId) => {
+const registerVisitor = async (visitorData, userId, visitorSignupId = null) => {
   if (!visitorData.name || !visitorData.contact || !visitorData.email) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Missing required visitor information');
   }
@@ -58,8 +58,9 @@ const registerVisitor = async (visitorData, userId) => {
       ...visitorData,
       visitDate,
       ticketId,
-      createdById: userId,
       status: 'PENDING',
+      ...(visitorSignupId && { visitorSignupId }),
+      ...(userId && { createdById: userId }),
     },
   });
 
@@ -144,11 +145,16 @@ const getVisitorStatus = async (identifier) => {
 
 /**
  * List visitor requests with optional filtering
- * @param {Object} filters
+ * @param {Object} filters - Filtering options
+ * @param {string} [filters.status] - Status of visitor requests
+ * @param {string} [filters.startDate] - Start date for filtering
+ * @param {string} [filters.endDate] - End date for filtering
+ * @param {number} [filters.createdById] - User ID who created the request
+ * @param {number} [filters.visitorSignupId] - Visitor signup ID
  * @returns {Array} List of visitor requests
  */
 const listVisitorRequests = async (filters = {}) => {
-  const { status, startDate, endDate, createdById } = filters;
+  const { status, startDate, endDate, createdById, visitorSignupId } = filters;
 
   const whereClause = {};
 
@@ -163,7 +169,9 @@ const listVisitorRequests = async (filters = {}) => {
     };
   }
 
-  if (createdById) {
+  if (visitorSignupId) {
+    whereClause.visitorSignupId = visitorSignupId;
+  } else if (createdById) {
     whereClause.createdById = createdById;
   }
 

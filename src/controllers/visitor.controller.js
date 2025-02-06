@@ -2,9 +2,31 @@ const httpStatus = require('http-status');
 const catchAsync = require('../utils/catchAsync');
 const ApiResponse = require('../utils/ApiResponse');
 const visitorService = require('../services/visitor.service');
+const db = require('../database/prisma');
 
 const registerVisitor = catchAsync(async (req, res) => {
-  const visitor = await visitorService.registerVisitor(req.body, req.user.id);
+  const isVisitorLoggedIn = req.user.role === 'VISITOR';
+
+  let visitorSignupId = null;
+  let userId = null;
+
+  if (isVisitorLoggedIn) {
+    const visitorSignup = await db.visitorSignup.findUnique({
+      where: {
+        id: req.user.id,
+      },
+    });
+
+    if (!visitorSignup) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'Visitor signup not found');
+    }
+
+    visitorSignupId = visitorSignup.id;
+  } else {
+    userId = req.user.id;
+  }
+
+  const visitor = await visitorService.registerVisitor(req.body, userId, visitorSignupId);
 
   res.status(httpStatus.CREATED).json(ApiResponse.success(httpStatus.CREATED, 'Visitor registered successfully', visitor));
 });
@@ -27,14 +49,34 @@ const getVisitorStatus = catchAsync(async (req, res) => {
 });
 
 const listVisitorRequests = catchAsync(async (req, res) => {
-  const { status, startDate, endDate } = req.query;
+  const { status, startDate, endDate, addedBy } = req.query;
+  const isVisitorLoggedIn = req.user.role === 'VISITOR';
 
-  const visitors = await visitorService.listVisitorRequests({
+  let filterOptions = {
     status,
     startDate,
     endDate,
-    createdById: req.user.id,
-  });
+  };
+
+  if (isVisitorLoggedIn) {
+    const visitorSignup = await db.visitorSignup.findUnique({
+      where: {
+        id: req.user.id,
+      },
+    });
+
+    if (!visitorSignup) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'Visitor signup not found');
+    }
+
+    filterOptions.visitorSignupId = visitorSignup.id;
+  } else {
+    if (addedBy) {
+      filterOptions.createdById = addedBy;
+    }
+  }
+
+  const visitors = await visitorService.listVisitorRequests(filterOptions);
 
   res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Visitor requests retrieved', visitors));
 });

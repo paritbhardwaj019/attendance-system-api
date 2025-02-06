@@ -4,5 +4,6 @@ module.exports = {
     CONTRACTOR: 'CONTRACTOR',
     MANAGER: 'MANAGER',
     LABOUR: 'LABOUR',
+    VISITOR: 'VISITOR',
   },
 };

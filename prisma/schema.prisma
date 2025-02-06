@@ -35,6 +35,8 @@ model Role {
   id    Int    @id @default(autoincrement())
   name  String @unique
   users User[]
+  visitorSignups VisitorSignup[]
+
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -195,6 +197,20 @@ model Attendance {
   @@unique([labourId, date], name: "labourId_date")
 }
 
+model VisitorSignup {
+  id             Int       @id @default(autoincrement())
+  name           String
+  mobile_number  String    @unique
+  password       String
+  roleId         Int
+  role           Role      @relation(fields: [roleId], references: [id])
+
+  visitors       Visitor[] 
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
 model Visitor {
   id           Int           @id @default(autoincrement())
   name         String
@@ -206,14 +222,17 @@ model Visitor {
   ticketId     String        @unique
   remarks      String?
 
-  createdBy   User? @relation("VisitorCreated", fields: [createdById], references: [id])
-  createdById Int?
+  visitorSignup   VisitorSignup?  @relation(fields: [visitorSignupId], references: [id])
+  visitorSignupId Int?
 
-  approvedBy   User? @relation("VisitorApproved", fields: [approvedById], references: [id])
-  approvedById Int?
+  createdBy     User? @relation("VisitorCreated", fields: [createdById], references: [id])
+  createdById   Int?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  approvedBy    User? @relation("VisitorApproved", fields: [approvedById], references: [id])
+  approvedById  Int?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 enum VisitorStatus {
