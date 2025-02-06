@@ -32,7 +32,9 @@
     "seed:codes": "node src/utils/initializeDefaultCodes.js",
     "seed:labour": "node src/scripts/seedLabour.js",
     "seed:data": "node src/data/seedData.js",
-    "update:labour": "node src/scripts/updateLabour.js"
+    "update:labour": "node src/scripts/updateLabour.js",
+    "backup:attendance": "node src/scripts/backups/attendanceBackup.js",
+    "restore:attendance": "node src/scripts/backups/attendanceRestore.js"
   },
   "keywords": [
     "node",

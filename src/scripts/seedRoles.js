@@ -5,7 +5,7 @@ const { ROLES } = require('../config/roles');
 const prisma = new PrismaClient();
 
 async function seedRoles() {
-  const roles = [ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR, ROLES.LABOUR];
+  const roles = [ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR, ROLES.LABOUR, ROLES.VISITOR];
 
   for (const roleName of roles) {
     const role = await prisma.role.upsert({

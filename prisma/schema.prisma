@@ -35,6 +35,8 @@ model Role {
   id    Int    @id @default(autoincrement())
   name  String @unique
   users User[]
+  visitorSignups VisitorSignup[]
+
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -195,25 +197,56 @@ model Attendance {
   @@unique([labourId, date], name: "labourId_date")
 }
 
+model VisitorSignup {
+  id             Int       @id @default(autoincrement())
+  name           String
+  mobile_number  String    @unique
+  password       String
+  roleId         Int
+  role           Role      @relation(fields: [roleId], references: [id])
+
+  visitors       Visitor[] 
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
 model Visitor {
-  id           Int           @id @default(autoincrement())
-  name         String
-  contact      String
-  email        String        @unique
-  visitPurpose String
-  visitDate    DateTime
-  status       VisitorStatus @default(PENDING)
-  ticketId     String        @unique
-  remarks      String?
+  id              Int            @id @default(autoincrement())
+  name            String         
+  contact         String         
+  email           String?        
+  visitPurpose    String?        
+  companyName     String?        
+  plantName       String?        
+  meetingWith     String?        
+  startDate       DateTime?      
+  status          VisitorStatus? @default(PENDING)
+  ticketId        String?        
+  remarks         String?        
+  
+  visitorSignup   VisitorSignup? @relation(fields: [visitorSignupId], references: [id])
+  visitorSignupId Int?          
+  
+  createdBy       User?          @relation("VisitorCreated", fields: [createdById], references: [id])
+  createdById     Int?          
+  
+  approvedBy      User?          @relation("VisitorApproved", fields: [approvedById], references: [id])
+  approvedById    Int?          
+  
+  photos          VisitorPhoto[] 
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt      
+}
 
-  createdBy   User? @relation("VisitorCreated", fields: [createdById], references: [id])
-  createdById Int?
-
-  approvedBy   User? @relation("VisitorApproved", fields: [approvedById], references: [id])
-  approvedById Int?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model VisitorPhoto {
+  id          Int      @id @default(autoincrement())
+  url         String
+  visitor     Visitor  @relation(fields: [visitorId], references: [id])
+  visitorId   Int
+  createdAt   DateTime @default(now()) 
+  updatedAt   DateTime @updatedAt     
 }
 
 enum VisitorStatus {

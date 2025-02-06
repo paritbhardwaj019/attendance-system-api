@@ -6,6 +6,7 @@ const attendanceRouter = require('./attendance.route');
 const visitorRouter = require('./visitor.route');
 const cameraRouter = require('./camera.route');
 const reportRouter = require('./report.route');
+const visitorAuthRouter = require('./visitorAuth.route');
 
 const router = express.Router();
 
@@ -37,6 +38,10 @@ const defaultRoutes = [
   {
     path: '/reports',
     route: reportRouter,
+  },
+  {
+    path: '/visitor-auth',
+    route: visitorAuthRouter,
   },
 ];
 
