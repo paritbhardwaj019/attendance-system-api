@@ -4,6 +4,7 @@ const httpStatus = require('http-status');
 const ApiError = require('../utils/ApiError');
 const config = require('../config/config');
 const QRCode = require('qrcode');
+const { uploadMultipleFilesToS3 } = require('./s3.service');
 
 /**
  * Generate unique ticket ID
@@ -27,41 +28,43 @@ const generateQRCode = async (ticketId) => {
   }
 };
 
-/**
- * Register a new visitor
- * @param {Object} visitorData
- * @param {number} userId
- * @returns {Object} Visitor registration details
- */
-const registerVisitor = async (visitorData, userId, visitorSignupId = null) => {
-  if (!visitorData.name || !visitorData.contact || !visitorData.email) {
+const registerVisitor = async (visitorData, userId, visitorSignupId = null, files) => {
+  if (!visitorData.name || !visitorData.contact) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Missing required visitor information');
   }
 
-  const existingVisitor = await db.visitor.findUnique({
-    where: {
-      email: visitorData.email,
-    },
-  });
+  const ticketId = generateTicketId();
+  const startDate = visitorData.startDate ? new Date(visitorData.startDate) : null;
+  delete visitorData.startDate;
 
-  if (existingVisitor) {
-    throw new ApiError(httpStatus.CONFLICT, 'Visitor with this email already exists');
+  let photoUrls = [];
+
+  if (files && files.photos && files.photos.length > 0) {
+    photoUrls = await uploadMultipleFilesToS3(files.photos, 'visitor-photos');
   }
 
-  const ticketId = generateTicketId();
+  const visitor = await db.$transaction(async (tx) => {
+    const visitorRecord = await tx.visitor.create({
+      data: {
+        ...visitorData,
+        startDate,
+        ticketId,
+        status: 'PENDING',
+        ...(visitorSignupId && { visitorSignupId }),
+        ...(userId && { createdById: userId }),
+      },
+    });
 
-  const visitDate = new Date(visitorData.visitDate);
-  delete visitorData.visitDate;
+    if (photoUrls.length > 0) {
+      await tx.visitorPhoto.createMany({
+        data: photoUrls.map((url) => ({
+          url,
+          visitorId: visitorRecord.id,
+        })),
+      });
+    }
 
-  const visitor = await db.visitor.create({
-    data: {
-      ...visitorData,
-      visitDate,
-      ticketId,
-      status: 'PENDING',
-      ...(visitorSignupId && { visitorSignupId }),
-      ...(userId && { createdById: userId }),
-    },
+    return visitorRecord;
   });
 
   const qrCodeUrl = await generateQRCode(ticketId);
@@ -177,15 +180,8 @@ const listVisitorRequests = async (filters = {}) => {
 
   const visitors = await db.visitor.findMany({
     where: whereClause,
-    select: {
-      ticketId: true,
-      name: true,
-      contact: true,
-      email: true,
-      status: true,
-      visitPurpose: true,
-      visitDate: true,
-      createdAt: true,
+    include: {
+      photos: true,
     },
     orderBy: {
       createdAt: 'desc',

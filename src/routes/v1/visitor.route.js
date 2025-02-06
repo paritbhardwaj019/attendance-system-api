@@ -3,12 +3,18 @@ const checkJWT = require('../../middlewares/checkJWT');
 const checkRole = require('../../middlewares/checkRole');
 const visitorController = require('../../controllers/visitor.controller');
 const { ROLES } = require('../../config/roles');
+const upload = require('../../middlewares/uploadMiddlware');
 
 const visitorRouter = express.Router();
 
 visitorRouter
   .route('/register')
-  .post(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.VISITOR]), visitorController.registerVisitor);
+  .post(
+    checkJWT,
+    checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.VISITOR]),
+    upload.fields([{ name: 'photos', maxCount: 10 }]),
+    visitorController.registerVisitor
+  );
 
 visitorRouter.route('/status/:identifier').get(visitorController.getVisitorStatus);
 

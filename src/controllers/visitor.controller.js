@@ -6,7 +6,6 @@ const db = require('../database/prisma');
 
 const registerVisitor = catchAsync(async (req, res) => {
   const isVisitorLoggedIn = req.user.role === 'VISITOR';
-
   let visitorSignupId = null;
   let userId = null;
 
@@ -16,17 +15,15 @@ const registerVisitor = catchAsync(async (req, res) => {
         id: req.user.id,
       },
     });
-
     if (!visitorSignup) {
       throw new ApiError(httpStatus.FORBIDDEN, 'Visitor signup not found');
     }
-
     visitorSignupId = visitorSignup.id;
   } else {
     userId = req.user.id;
   }
 
-  const visitor = await visitorService.registerVisitor(req.body, userId, visitorSignupId);
+  const visitor = await visitorService.registerVisitor(req.body, userId, visitorSignupId, req.files);
 
   res.status(httpStatus.CREATED).json(ApiResponse.success(httpStatus.CREATED, 'Visitor registered successfully', visitor));
 });
