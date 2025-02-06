@@ -66,12 +66,26 @@ const getCustomReport = catchAsync(async (req, res) => {
   res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Custom report retrieved successfully', report));
 });
 
+const getContractorDailyReport = catchAsync(async (req, res) => {
+  const filters = pick(req.query, ['startDate', 'contractorId']);
+  const report = await reportService.fetchContractorDailyReport(filters);
+  res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Contractor daily report retrieved successfully', report));
+});
+
+const getContractorCustomReport = catchAsync(async (req, res) => {
+  const filters = pick(req.query, ['startDate', 'endDate', 'contractorId', 'isSummarized']);
+  const report = await reportService.fetchContractorCustomReport(filters);
+  res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Contractor custom report retrieved successfully', report));
+});
+
 const reportController = {
   getLabourReport,
   getLabourReportById,
   getContractorLabourReport,
   getDailyReport,
   getCustomReport,
+  getContractorDailyReport,
+  getContractorCustomReport,
 };
 
 module.exports = reportController;

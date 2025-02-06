@@ -698,7 +698,7 @@ const deleteContractorHandler = async (loggedInUser, contractorId) => {
     { timeout: 10000 }
   );
 
-  await cameraService.deleteUserFromCamera(contractor.employeeNo);
+  // await cameraService.deleteUserFromCamera(contractor.employeeNo);
   // if (contractor.photos.length > 0) {
   //   await cameraService.deleteFacePictureFromCamera(contractor.employeeNo);
   // }

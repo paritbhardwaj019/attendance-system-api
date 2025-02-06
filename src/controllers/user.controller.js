@@ -5,7 +5,9 @@ const ApiResponse = require('../utils/ApiResponse');
 const pick = require('../utils/pick');
 
 const createUser = catchAsync(async (req, res) => {
+  console.log("req.body",req.body);
   const user = await userService.createUserHandler(req.body);
+
   res.status(httpStatus.CREATED).json(ApiResponse.success(httpStatus.CREATED, 'User created successfully', user));
 });
 

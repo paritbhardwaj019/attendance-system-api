@@ -701,10 +701,188 @@ const fetchCustomReportHandler = async (filters) => {
 
 const fetchContractorReport = async (filters) => {
   const { startDate, endDate, contractorId} = filters;
-  const report = await fetchDailyReportHandler({ startDate, endDate, labourId });
+  const report = await fetchDailyReportHandler({ startDate, endDate, contractorId });
   return report;
 };
 
+const fetchContractorDailyReport = async (filters) => {
+  const { startDate, contractorId } = filters;
+  const report = await fetchDailyReportHandler({ startDate, contractorId });
+
+  // Fetch all contractors from the contractors table
+  const contractors = await db.contractor.findMany({
+        select: {
+          user: {
+            select: {
+              name: true,
+            },
+          },
+   employeeNo: true,  
+   id: true
+        },
+  });
+  // Initialize a map to aggregate data by contractor
+  const contractorMap = new Map();
+
+  // Process each record to group by contractor
+  report.data.forEach(record => {
+    const contractorId = record.contractorId;
+    console.log("contractorId",contractorId);
+    // Check if contractor exists in the contractors data
+    const contractor = contractors.find(c => c.id === contractorId);
+    const contractorName = contractor ? contractor.user.name : "Unknown"; // Get contractor name or set to "Unknown"
+    console.log("contractor details",contractor);
+    if (!contractorMap.has(contractorId)) {
+      contractorMap.set(contractorId, {
+        contractorId: contractorId,
+        firmName: contractorName,
+        employeeNo: contractor.employeeNo, // Assuming employeeNo is available in the record
+        totalWorkingHours: 0,
+        name: contractor.user.name, // Assuming name is available in the record
+        date: record.date,
+        siteCode: contractor.siteCode ?? "-",
+      });
+    }
+
+    // Accumulate total working hours for the contractor
+    const contractorData = contractorMap.get(contractorId);
+    contractorData.totalWorkingHours += record.hours || 0; // Add working hours
+  });
+
+  // Convert the map to an array
+  const data = Array.from(contractorMap.values());
+
+  // Create summary
+  const summary = {
+    total_contractors: contractorMap.size,
+    total_labours: report.summary.totalLabours, // Total labours from the original report
+    total_working_hours: data.reduce((acc, contractor) => acc + contractor.totalWorkingHours, 0),
+    date: report.summary.date,
+    startDate: startDate,
+    endDate: startDate,
+    average_hours_per_day: report.summary.averageHoursPerDay,
+    total_days: report.summary.totalDays,
+    is_summarized: "false",
+  };
+
+  return {
+    data,
+    summary,
+    columns: [
+      { field: 'contractorId', headerName: 'Contractor ID', width: 100, visible: true },
+      { field: 'employeeNo', headerName: 'Employee No', width: 100, visible: true },
+      { field: 'totalWorkingHours', headerName: 'Total Working Hours', width: 100, visible: true },
+      { field: 'name', headerName: 'Name', width: 100 , visible: true},
+      { field: 'siteCode', headerName: 'Site Code', width: 100 , visible: true},
+      { field: 'date', headerName: 'Date', width: 150, visible: true },
+      {field: 'startDate', headerName: 'Start Date', width: 150, visible: false},
+      {field: 'endDate', headerName: 'End Date', width: 150, visible: false},
+      {field: 'is_summarized', headerName: 'Is Summarized', width: 150, visible: false},
+    ],
+  };
+};
+
+const fetchContractorCustomReport = async (filters) => {
+  const { startDate, endDate, contractorId, isSummarized = false } = filters;
+  const report = await fetchCustomReportHandler({ startDate, endDate, contractorId });
+
+  // Fetch all contractors from the contractors table
+  const contractors = await db.contractor.findMany({
+    select: {
+      user: {
+        select: {
+          name: true,
+        },
+      },
+      employeeNo: true,
+      id: true
+    },
+  });
+
+  // Initialize maps for both detailed and summarized data
+  const contractorDateMap = new Map();
+  const contractorSummaryMap = new Map();
+
+  // Process each record to group by contractor and date
+  report.data.forEach(record => {
+    const contractorId = record.contractorId;
+    const dateKey = record.date;
+    const mapKey = `${contractorId}-${dateKey}`;
+
+    // Check if contractor exists in the contractors data
+    const contractor = contractors.find(c => c.id === contractorId);
+    const contractorName = contractor ? contractor.user.name : "Unknown";
+
+    if (!contractorDateMap.has(mapKey)) {
+      contractorDateMap.set(mapKey, {
+        contractorId: contractorId,
+        firmName: contractorName,
+        employeeNo: contractor?.employeeNo || "-",
+        totalWorkingHours: 0,
+        name: contractor?.user?.name || "Unknown",
+        date: dateKey,
+        siteCode: contractor?.siteCode || "-",
+      });
+    }
+
+    // Update daily records
+    const contractorData = contractorDateMap.get(mapKey);
+    contractorData.totalWorkingHours = parseFloat((contractorData.totalWorkingHours + (record.hours || 0)).toFixed(2));
+
+    // Update summarized records
+    if (!contractorSummaryMap.has(contractorId)) {
+      contractorSummaryMap.set(contractorId, {
+        contractorId: contractorId,
+        firmName: contractorName,
+        employeeNo: contractor?.employeeNo || "-",
+        totalWorkingHours: 0,
+        name: contractor?.user?.name || "Unknown",
+        startDate: startDate,
+        endDate: endDate,
+        siteCode: contractor?.siteCode || "-",
+      });
+    }
+    const summaryData = contractorSummaryMap.get(contractorId);
+    summaryData.totalWorkingHours = parseFloat((summaryData.totalWorkingHours + (record.hours || 0)).toFixed(2));
+  });
+
+  // Choose which data to use based on isSummarized flag
+  const data = isSummarized 
+    ? Array.from(contractorSummaryMap.values())
+    : Array.from(contractorDateMap.values()).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  // Calculate unique contractors and total working hours
+  const uniqueContractors = new Set(data.map(item => item.contractorId));
+
+  const summary = {
+    total_contractors: uniqueContractors.size,
+    total_labours: report.summary.totalLabours,
+    total_working_hours: parseFloat(data.reduce((acc, record) => acc + record.totalWorkingHours, 0).toFixed(2)),
+      start_date: startDate,
+      end_date: endDate
+  ,
+    average_hours_per_day: parseFloat(report.summary.averageHoursPerDay.toFixed(2)),
+    total_days: report.summary.totalDays
+  };
+
+  // Define columns based on isSummarized flag
+  const columns = [
+    { field: 'contractorId', headerName: 'Contractor ID', width: 100, visible: true },
+    { field: 'employeeNo', headerName: 'Employee No', width: 100, visible: true },
+    { field: 'totalWorkingHours', headerName: 'Total Working Hours', width: 100, visible: true },
+    { field: 'name', headerName: 'Name', width: 100, visible: true },
+    { field: 'siteCode', headerName: 'Site Code', width: 100, visible: false },
+    { field: 'date', headerName: 'Date', width: 100, visible: isSummarized == "true" ? false : true },
+    { field: 'startDate', headerName: 'Start Date', width: 100, visible: isSummarized == "true" ? true : false },
+    { field: 'endDate', headerName: 'End Date', width: 100, visible: isSummarized == "true" ? true : false }
+  ];
+
+  return {
+    data,
+    summary,
+    columns,
+  };
+};
 
 const formatResultTime = (time) => {
   if (!time) return null;
@@ -724,6 +902,9 @@ const reportService = {
   fetchContractorLabourReportHandler,
   fetchDailyReportHandler,
   fetchCustomReportHandler,
+  fetchContractorReport,
+  fetchContractorDailyReport,
+  fetchContractorCustomReport,
 };
 
 module.exports = reportService;
