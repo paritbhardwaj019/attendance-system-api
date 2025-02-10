@@ -25,7 +25,7 @@ async function main() {
   await prisma.visitorSignup.deleteMany({});
 
   // Delete system codes before user
-  // await prisma.systemCode.deleteMany({});
+  await prisma.systemCode.deleteMany({});
 
   // Finally delete users
   await prisma.user.deleteMany({});
