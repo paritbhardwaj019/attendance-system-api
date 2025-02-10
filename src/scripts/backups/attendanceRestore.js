@@ -25,13 +25,13 @@ async function main() {
   await prisma.visitorSignup.deleteMany({});
 
   // Delete system codes before user
-  await prisma.systemCode.deleteMany({});
+  // await prisma.systemCode.deleteMany({});
 
   // Finally delete users
   await prisma.user.deleteMany({});
 
   // Delete remaining independent tables
-  await prisma.role.deleteMany({});
+  // await prisma.role.deleteMany({});
   await prisma.plant.deleteMany({});
 
   const adminRole = await prisma.role.upsert({
