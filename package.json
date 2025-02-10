@@ -11,7 +11,7 @@
     "node": ">=12.0.0"
   },
   "scripts": {
-    "start": "pm2 start ecosystem.config.json --no-daemon",
+    "start": "node src/index.js",
     "dev": "cross-env NODE_ENV=development nodemon src/index.js",
     "test": "jest -i --colors --verbose --detectOpenHandles",
     "test:watch": "jest -i --watchAll",
@@ -34,7 +34,8 @@
     "seed:data": "node src/data/seedData.js",
     "update:labour": "node src/scripts/updateLabour.js",
     "backup:attendance": "node src/scripts/backups/attendanceBackup.js",
-    "restore:attendance": "node src/scripts/backups/attendanceRestore.js"
+    "restore:attendance": "node src/scripts/backups/attendanceRestore.js",
+    "build": "npm install"
   },
   "keywords": [
     "node",
@@ -105,7 +106,6 @@
     "eslint-plugin-prettier": "^3.1.1",
     "eslint-plugin-security": "^1.4.0",
     "faker": "^5.5.3",
-    "husky": "7.0.4",
     "jest": "^26.0.1",
     "lint-staged": "^11.0.0",
     "node-mocks-http": "^1.8.0",
