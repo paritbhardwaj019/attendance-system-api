@@ -19,7 +19,7 @@ reportRouter
   .route('/contractor')
   .get(
     checkJWT, 
-    checkRole([ROLES.ADMIN, ROLES.MANAGER]), 
+    checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR]), 
     reportController.getContractorLabourReport
   );
 
@@ -43,5 +43,14 @@ reportRouter
 reportRouter
   .route('/customReport')
   .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR]), reportController.getCustomReport);
+
+reportRouter
+  .route('/contractor/dailyReport')
+  .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR]), reportController.getContractorDailyReport);
+
+reportRouter
+  .route('/contractor/customReport')
+  .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR]), reportController.getContractorCustomReport);
+
 
 module.exports = reportRouter;

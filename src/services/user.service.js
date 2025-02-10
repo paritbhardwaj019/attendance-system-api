@@ -61,12 +61,16 @@ const createUserHandler = async (userData) => {
           break;
 
         case ROLES.CONTRACTOR:
+          console.log("userData",userData);
           employeeNo = await getNextCode('CONTRACTOR');
           await prisma.contractor.create({
             data: {
               user: { connect: { id: user.id } },
               firm_name: userData.firm_name,
               employeeNo,
+              // startDate: userData.startDate,
+              // endDate: userData.endDate,
+              // siteCode: userData.siteCode,
               manager: userData.manager_id
                 ? {
                     connect: { id: userData.manager_id },
@@ -74,7 +78,7 @@ const createUserHandler = async (userData) => {
                 : undefined,
             },
           });
-          await cameraService.addUserToCamera(employeeNo, user.name);
+          // await cameraService.addUserToCamera(employeeNo, user.name);
           break;
 
         case ROLES.LABOUR:
