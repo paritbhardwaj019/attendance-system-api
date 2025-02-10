@@ -26,4 +26,10 @@ visitorRouter
   .route('/')
   .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.VISITOR]), visitorController.listVisitorRequests);
 
+visitorRouter.route('/:ticketId/entry').post(visitorController.handleVisitorEntry);
+
+visitorRouter
+  .route('/records')
+  .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.VISITOR]), visitorController.getVisitorRecords);
+
 module.exports = visitorRouter;

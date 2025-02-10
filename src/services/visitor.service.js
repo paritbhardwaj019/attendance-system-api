@@ -29,52 +29,56 @@ const generateQRCode = async (ticketId) => {
 };
 
 const registerVisitor = async (visitorData, userId, visitorSignupId = null, files) => {
-  if (!visitorData.name || !visitorData.contact) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Missing required visitor information');
-  }
-
-  const ticketId = generateTicketId();
-  const startDate = visitorData.startDate ? new Date(visitorData.startDate) : null;
-  delete visitorData.startDate;
-
-  let photoUrls = [];
-
-  if (files && files.photos && files.photos.length > 0) {
-    photoUrls = await uploadMultipleFilesToS3(files.photos, 'visitor-photos');
-  }
-
-  const visitor = await db.$transaction(async (tx) => {
-    const visitorRecord = await tx.visitor.create({
-      data: {
-        ...visitorData,
-        startDate,
-        ticketId,
-        status: 'PENDING',
-        ...(visitorSignupId && { visitorSignupId }),
-        ...(userId && { createdById: userId }),
-      },
-    });
-
-    if (photoUrls.length > 0) {
-      await tx.visitorPhoto.createMany({
-        data: photoUrls.map((url) => ({
-          url,
-          visitorId: visitorRecord.id,
-        })),
-      });
+  try {
+    if (!visitorData.name || !visitorData.contact) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Missing required visitor information');
     }
 
-    return visitorRecord;
-  });
+    const ticketId = generateTicketId();
+    const startDate = visitorData.startDate ? new Date(visitorData.startDate) : null;
+    delete visitorData.startDate;
 
-  const qrCodeUrl = await generateQRCode(ticketId);
+    let photoUrls = [];
 
-  return {
-    ticketId: visitor.ticketId,
-    qrCodeUrl,
-    status: visitor.status,
-    visitor,
-  };
+    if (files && files.photos && files.photos.length > 0) {
+      photoUrls = await uploadMultipleFilesToS3(files.photos, 'visitor-photos');
+    }
+
+    const visitor = await db.$transaction(async (tx) => {
+      const visitorRecord = await tx.visitor.create({
+        data: {
+          ...visitorData,
+          startDate,
+          ticketId,
+          status: 'PENDING',
+          ...(visitorSignupId && { visitorSignupId }),
+          ...(userId && { createdById: userId }),
+        },
+      });
+
+      if (photoUrls.length > 0) {
+        await tx.visitorPhoto.createMany({
+          data: photoUrls.map((url) => ({
+            url,
+            visitorId: visitorRecord.id,
+          })),
+        });
+      }
+
+      return visitorRecord;
+    });
+
+    const qrCodeUrl = await generateQRCode(ticketId);
+
+    return {
+      ticketId: visitor.ticketId,
+      qrCodeUrl,
+      status: visitor.status,
+      visitor,
+    };
+  } catch (error) {
+    console.log(error);
+  }
 };
 
 /**
@@ -91,33 +95,23 @@ const processVisitorRequest = async (ticketId, status, remarks, userId) => {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid status');
   }
 
-  const existingVisitor = await db.visitor.findUnique({
-    where: { ticketId },
-  });
-
-  if (!existingVisitor) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Visitor not found');
-  }
-
   const visitor = await db.visitor.update({
     where: { ticketId },
     data: {
       status,
       remarks,
-      approvedBy: {
-        connect: {
-          id: userId,
-        },
-      },
+      approvedById: userId,
+    },
+    include: {
+      plant: true,
     },
   });
 
-  return {
-    ticketId: visitor.ticketId,
-    name: visitor.name,
-    status: visitor.status,
-    remarks: visitor.remarks,
-  };
+  if (!visitor) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Visitor not found');
+  }
+
+  return visitor;
 };
 
 /**
@@ -191,11 +185,81 @@ const listVisitorRequests = async (filters = {}) => {
   return visitors;
 };
 
+const handleVisitorEntry = async (ticketId) => {
+  const visitor = await db.visitor.findUnique({
+    where: { ticketId },
+    include: {
+      entries: {
+        where: {
+          dateOfVisit: {
+            gte: new Date(new Date().setHours(0, 0, 0, 0)),
+            lte: new Date(new Date().setHours(23, 59, 59, 999)),
+          },
+        },
+      },
+    },
+  });
+
+  if (!visitor) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Visitor not found');
+  }
+
+  let entry = visitor.entries[0];
+
+  if (!entry) {
+    entry = await db.visitorEntry.create({
+      data: {
+        visitorId: visitor.id,
+        plantId: visitor.plantId,
+        dateOfVisit: new Date(),
+      },
+    });
+  }
+
+  const isExit = entry.entryTime && !entry.exitTime;
+
+  const updatedEntry = await db.visitorEntry.update({
+    where: { id: entry.id },
+    data: isExit ? { exitTime: new Date() } : { entryTime: new Date() },
+  });
+
+  return {
+    action: isExit ? 'EXIT' : 'ENTRY',
+    time: isExit ? updatedEntry.exitTime : updatedEntry.entryTime,
+    visitor: visitor.name,
+    ticketId: visitor.ticketId,
+  };
+};
+
+const getVisitorRecords = async (startDate, endDate, plantId) => {
+  const where = {
+    dateOfVisit: {
+      gte: new Date(startDate),
+      lte: new Date(endDate),
+    },
+  };
+
+  if (plantId) {
+    where.plantId = plantId;
+  }
+
+  return db.visitorEntry.findMany({
+    where,
+    include: {
+      visitor: true,
+      plant: true,
+    },
+    orderBy: { dateOfVisit: 'desc' },
+  });
+};
+
 const visitorService = {
   registerVisitor,
   processVisitorRequest,
   getVisitorStatus,
   listVisitorRequests,
+  handleVisitorEntry,
+  getVisitorRecords,
 };
 
 module.exports = visitorService;

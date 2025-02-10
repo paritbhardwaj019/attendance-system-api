@@ -1,8 +1,8 @@
 const axios = require('axios');
 const httpStatus = require('http-status');
 
-// const BASE_URL = 'http://ec2-15-207-115-92.ap-south-1.compute.amazonaws.com:3000/api/v1';
-const BASE_URL = 'http://localhost:3000/api/v1';
+const BASE_URL = 'http://ec2-15-207-115-92.ap-south-1.compute.amazonaws.com:3000/api/v1';
+// const BASE_URL = 'http://localhost:3000/api/v1';
 let JWT_TOKEN = null;
 
 /**
@@ -171,7 +171,7 @@ const fetchAttendance = async (filters = {}) => {
 };
 
 (async () => {
-  await login('whynotparit', 'b14ck-cyph3R');
+  await login('admin', 'admin@123');
 
   // await createUser({
   //   name: 'John Doe',
@@ -201,9 +201,9 @@ const fetchAttendance = async (filters = {}) => {
   //   endDate: '2025-01-20',
   // });
 
-  await fetchAttendance({
-    startDate: '2025-01-22',
-    endDate: '2025-01-22',
-    // contractorId: 1,
-  });
+  // await fetchAttendance({
+  //   startDate: '2025-01-22',
+  //   endDate: '2025-01-22',
+  //   // contractorId: 1,
+  // });
 })();

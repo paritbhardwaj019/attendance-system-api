@@ -3,15 +3,36 @@ const prisma = new PrismaClient();
 
 async function main() {
   await prisma.attendance.deleteMany({});
+
+  // Delete photos and PDFs as they depend on Labour and Contractor
   await prisma.labourPhoto.deleteMany({});
   await prisma.labourPDF.deleteMany({});
-  await prisma.labour.deleteMany({});
   await prisma.contractorPhoto.deleteMany({});
   await prisma.contractorPDF.deleteMany({});
+
+  // Delete visitor related entries
+  await prisma.visitorEntry.deleteMany({});
+  await prisma.visitorPhoto.deleteMany({});
+  await prisma.visitor.deleteMany({});
+
+  // Delete user type models
+  await prisma.labour.deleteMany({});
   await prisma.contractor.deleteMany({});
-  await prisma.admin.deleteMany({});
   await prisma.manager.deleteMany({});
+  await prisma.admin.deleteMany({});
+
+  // Delete visitor signup
+  await prisma.visitorSignup.deleteMany({});
+
+  // Delete system codes before user
+  await prisma.systemCode.deleteMany({});
+
+  // Finally delete users
   await prisma.user.deleteMany({});
+
+  // Delete remaining independent tables
+  await prisma.role.deleteMany({});
+  await prisma.plant.deleteMany({});
 
   const adminRole = await prisma.role.upsert({
     where: { name: 'ADMIN' },

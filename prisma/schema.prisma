@@ -218,26 +218,45 @@ model Visitor {
   email           String?        
   visitPurpose    String?        
   companyName     String?        
-  plantName       String?        
+  plant           Plant?         @relation(fields: [plantId], references: [id])
+  plantId         Int?
   meetingWith     String?        
   startDate       DateTime?      
-  status          VisitorStatus? @default(PENDING)
-  ticketId        String?        
-  remarks         String?        
+  status          VisitorStatus  @default(PENDING)
+  ticketId        String     @unique
+  remarks         String?       
+  requestTime     DateTime       @default(now())
   
   visitorSignup   VisitorSignup? @relation(fields: [visitorSignupId], references: [id])
   visitorSignupId Int?          
   
   createdBy       User?          @relation("VisitorCreated", fields: [createdById], references: [id])
-  createdById     Int?          
+  createdById     Int?  
   
   approvedBy      User?          @relation("VisitorApproved", fields: [approvedById], references: [id])
   approvedById    Int?          
   
-  photos          VisitorPhoto[] 
+  photos          VisitorPhoto[]
+  entries         VisitorEntry[]
   
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt      
+}
+
+model VisitorEntry {
+  id          Int       @id @default(autoincrement())
+  visitor     Visitor   @relation(fields: [visitorId], references: [id])
+  visitorId   Int
+  plant       Plant?    @relation(fields: [plantId], references: [id])
+  plantId     Int?
+  dateOfVisit DateTime
+  entryTime   DateTime?
+  exitTime    DateTime?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([visitorId, dateOfVisit])
 }
 
 model VisitorPhoto {
@@ -247,6 +266,16 @@ model VisitorPhoto {
   visitorId   Int
   createdAt   DateTime @default(now()) 
   updatedAt   DateTime @updatedAt     
+}
+
+model Plant {
+  id          Int       @id @default(autoincrement())
+  name        String
+  code        String    @unique
+  visitors    Visitor[]
+  entries     VisitorEntry[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 enum VisitorStatus {
