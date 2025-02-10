@@ -34,7 +34,8 @@
     "seed:data": "node src/data/seedData.js",
     "update:labour": "node src/scripts/updateLabour.js",
     "backup:attendance": "node src/scripts/backups/attendanceBackup.js",
-    "restore:attendance": "node src/scripts/backups/attendanceRestore.js"
+    "restore:attendance": "node src/scripts/backups/attendanceRestore.js",
+    "build": "npm install --legacy-peer-deps"
   },
   "keywords": [
     "node",
