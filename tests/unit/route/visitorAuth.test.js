@@ -4,6 +4,7 @@ const httpStatus = require('http-status');
 // const BASE_URL = 'http://ec2-15-207-115-92.ap-south-1.compute.amazonaws.com:3000/api/v1';
 const BASE_URL = 'http://localhost:3000/api/v1';
 let JWT_TOKEN = null;
+let VISITOR_DATA = null;
 
 /**
  * Signup a new visitor
@@ -21,6 +22,19 @@ const visitorSignup = async (visitorData) => {
   } catch (error) {
     console.error('Error during visitor signup:', error.response ? error.response.data : error.message);
     throw error;
+  }
+};
+
+const login = async (username, password) => {
+  try {
+    const response = await axios.post(`${BASE_URL}/auth/login`, {
+      username,
+      password,
+    });
+
+    return response.data.data.accessToken;
+  } catch (error) {
+    console.error('Error during login:', error.response ? error.response.data : error.message);
   }
 };
 
@@ -57,8 +71,7 @@ const visitorLogin = async (loginData) => {
  */
 const registerVisitorRequest = async (visitorRequestData) => {
   if (!JWT_TOKEN) {
-    console.error('Please login first.');
-    return;
+    throw new Error('Please login first');
   }
 
   try {
@@ -68,12 +81,41 @@ const registerVisitorRequest = async (visitorRequestData) => {
       },
     });
 
-    console.log(response.data);
-
-    console.log('Visitor request registered successfully:', response.data.data);
-    return response.data.data;
+    VISITOR_DATA = response.data.data;
+    console.log('Visitor request registered successfully:', VISITOR_DATA);
+    return VISITOR_DATA;
   } catch (error) {
     console.error('Error registering visitor request:', error.response ? error.response.data : error.message);
+    throw error;
+  }
+};
+
+/**
+ * Process (approve/reject) a visitor request
+ * @param {string} ticketId - Ticket ID of the visitor request
+ * @param {string} status - New status (APPROVED/REJECTED)
+ * @param {string} remarks - Remarks for the status change
+ */
+const processVisitorRequest = async (ticketId, status, remarks, token) => {
+  if (!JWT_TOKEN) {
+    throw new Error('Please login first');
+  }
+
+  try {
+    const response = await axios.put(
+      `${BASE_URL}/visitor/${ticketId}/process`,
+      { status, remarks },
+      {
+        headers: {
+          'x-auth-token': token,
+        },
+      }
+    );
+
+    console.log('Visitor request processed successfully:', response.data.data);
+    return response.data.data;
+  } catch (error) {
+    console.error('Error processing visitor request:', error.response ? error.response.data : error.message);
     throw error;
   }
 };
@@ -141,43 +183,70 @@ const getVisitorRecords = async (filters = {}) => {
     headers: { 'x-auth-token': JWT_TOKEN },
     params: filters,
   });
-  console.log(response.data.data);
 
   return response.data.data;
 };
 
-// Example usage
 (async () => {
   try {
-    // await visitorSignup({
-    //   name: 'Test Visitor',
-    //   mobile_number: '8057527852',
-    //   password: 'password123',
-    // });
+    const adminToken = await login('whynotparit', 'b14ck-cyph3R');
+    JWT_TOKEN = adminToken;
 
-    // Login
-    // await visitorLogin({
-    //   mobile_number: '8057527852',
-    //   password: 'password123',
-    // });
+    const plant = await axios.post(
+      `${BASE_URL}/plants`,
+      {
+        name: 'Test Plant',
+        plantHead: 'Plant Head',
+        plantHeadId: 1,
+      },
+      {
+        headers: {
+          'x-auth-token': adminToken,
+        },
+      }
+    );
 
-    // Register visit
-    // await registerVisitorRequest({
-    //   name: 'Test Visitor',
-    //   contact: '8057527852',
-    //   email: 'test@example.com',
-    //   visitPurpose: 'Meeting',
-    //   startDate: '2025-02-15',
-    // });
+    const createdPlant = plant.data.data;
 
-    // Handle entry/exit
-    await handleVisitorEntry('VIS-DBBC3F77');
+    await visitorSignup({
+      name: 'Test Visitor',
+      mobile_number: '80575278523',
+      password: 'password123',
+    });
 
-    // // Get records
-    // await getVisitorRecords({
-    //   startDate: '2025-02-10',
-    //   endDate: '2025-02-15',
-    // });
+    const visitorLoginResponse = await visitorLogin({
+      mobile_number: '80575278523',
+      password: 'password123',
+    });
+
+    JWT_TOKEN = visitorLoginResponse.accessToken;
+
+    const visitorRequest = await registerVisitorRequest({
+      name: 'Test Visitor',
+      contact: '80575278523',
+      email: 'test@example.com',
+      visitPurpose: 'Meeting',
+      startDate: '2025-02-16',
+      plantId: createdPlant.id,
+      meetingWith: 'Plant Head',
+      companyName: 'Test Company',
+    });
+
+    if (visitorRequest.ticketId) {
+      JWT_TOKEN = adminToken;
+
+      await processVisitorRequest(visitorRequest.ticketId, 'APPROVED', 'Approved by admin', adminToken);
+
+      await handleVisitorEntry(visitorRequest.ticketId);
+
+      const records = await getVisitorRecords({
+        startDate: '2025-02-10',
+        endDate: '2025-02-15',
+        plantId: createdPlant.id,
+      });
+
+      console.log('Visitor Records:', records);
+    }
   } catch (error) {
     console.error('Error:', error.response?.data || error.message);
   }

@@ -5,7 +5,6 @@ const ApiResponse = require('../utils/ApiResponse');
 const pick = require('../utils/pick');
 
 const createUser = catchAsync(async (req, res) => {
-  console.log("req.body",req.body);
   const user = await userService.createUserHandler(req.body);
 
   res.status(httpStatus.CREATED).json(ApiResponse.success(httpStatus.CREATED, 'User created successfully', user));
@@ -31,11 +30,18 @@ const deleteUser = catchAsync(async (req, res) => {
   res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'User deleted successfully'));
 });
 
+const getUsersWithPasswords = catchAsync(async (req, res) => {
+  const filters = pick(req.query, ['manager', 'contractor', 'visitor', 'search']);
+  const result = await userService.getUsersWithPasswordsHandler(filters);
+  res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Users with passwords retrieved successfully', result));
+});
+
 const userController = {
   createUser,
   getUsers,
   getUser,
   deleteUser,
+  getUsersWithPasswords,
 };
 
 module.exports = userController;

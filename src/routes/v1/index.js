@@ -7,6 +7,8 @@ const visitorRouter = require('./visitor.route');
 const cameraRouter = require('./camera.route');
 const reportRouter = require('./report.route');
 const visitorAuthRouter = require('./visitorAuth.route');
+const plantRouter = require('./plant.route');
+const dashboardRouter = require('./dashboard.route');
 
 const router = express.Router();
 
@@ -42,6 +44,14 @@ const defaultRoutes = [
   {
     path: '/visitor-auth',
     route: visitorAuthRouter,
+  },
+  {
+    path: '/plants',
+    route: plantRouter,
+  },
+  {
+    path: '/dashboard',
+    route: dashboardRouter,
   },
 ];
 

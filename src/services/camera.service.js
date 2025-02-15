@@ -304,24 +304,18 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
 
     if (!startDate || !endDate) {
       const todayRange = getTodayDateRange();
-      console.log('todayRange', todayRange);
       startTime = todayRange.startDate;
       endTime = todayRange.endDate;
     } else {
       const formattedStartDate = formatDateForCamera(startDate);
       const formattedEndDate = formatDateForCamera(endDate);
-      console.log('formattedStartDate', formattedStartDate);
       startTime = typeof formattedStartDate === 'object' ? formattedStartDate.startTime : formattedStartDate;
       endTime = typeof formattedEndDate === 'object' ? formattedEndDate.endTime : formattedEndDate;
-
-      console.log('startTime', startTime);
-      console.log('endTime', endTime);
     }
 
     const start = formatTimeInIndianTimezone(startTime);
     const end = formatTimeInIndianTimezone(endTime);
 
-    console.log('start', start, 'end', end);
     // // Get today's date in yyyy-mm-dd format
     const today = new Date();
     const todayString = today.toISOString().split('T')[0]; // "2025-01-22"
@@ -331,7 +325,6 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
 
     // // Check if both dates are the same
     const isTodayDate = startString === todayString;
-    console.log('isTodayDate', isTodayDate);
     // console.log('Is Start Date Today?', isToday);
 
     // const todayDate = new Date();
@@ -353,8 +346,6 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
     }, {});
 
     if (isTodayDate) {
-      console.log('isToday', isTodayDate);
-      console.log('START TIME', startTime);
       // console.log('END TIME', endTime);
 
       const currentTime = new Date();
@@ -375,8 +366,6 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
       // Construct the startTime string in the desired format
       startTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${timezoneOffset}`;
 
-      console.log('UPDATED START TIME', startTime);
-      console.log('UPDATED END TIME', endTime);
       const cameraApiBody = {
         AcsEventCond: {
           searchID: Math.random().toString(36).substring(2, 15),
@@ -394,8 +383,6 @@ const getAttendanceRecords = async (startDate, endDate, contractorId = null) => 
         data: cameraApiBody,
         headers: { 'Content-Type': 'application/json' },
       });
-
-      console.log('CAMERA RESPONSE', cameraResponse.data);
 
       if (cameraResponse.status !== 200) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to fetch attendance from camera system');
@@ -687,7 +674,6 @@ const formatCameraTime = () => {
 const getDCameraResult = async () => {
   try {
     const formattedStartTime = formatCameraTime();
-    console.log('Fetching camera data from:', formattedStartTime);
 
     const response = await digestAuth.request({
       method: 'POST',
@@ -717,9 +703,7 @@ const getDCameraResult = async () => {
 const getDailyAttendance = async (startDate, contractorId = null) => {
   try {
     const queryDate = startDate ? timeUtils.formatToIST(startDate) : timeUtils.getCurrentTime();
-    console.log('QUERY DATE', queryDate);
     const queryDateString = timeUtils.formatDateOnly(queryDate);
-    console.log('QUERY DATE STRING', queryDateString);
     // Get all required data
     const [labours, attendanceRecords] = await Promise.all([getDLabours(contractorId), getDAttendance(queryDateString)]);
 
@@ -732,7 +716,6 @@ const getDailyAttendance = async (startDate, contractorId = null) => {
 
     // Process today's attendance
     let cameraData = await getDCameraResult();
-    console.log('Camera data entries:', cameraData.length);
 
     // Create attendance map for quick lookup
     const attendanceMap = new Map(attendanceRecords.map((record) => [record.labourId, record]));
@@ -911,8 +894,6 @@ const fillDataInDb = async () => {
     while (currentStartTime < endDateTime) {
       const intervalEndTime = new Date(currentStartTime.getTime() + 30 * 60 * 1000);
 
-      console.log(`Fetching data from ${currentStartTime.toISOString()} to ${intervalEndTime.toISOString()}`);
-
       // Call camera API
       const cameraResponse = await digestAuth.request({
         method: 'POST',
@@ -1001,7 +982,6 @@ const fillDataInDb = async () => {
       currentStartTime = intervalEndTime;
     }
 
-    console.log('Data fill completed successfully');
     return { success: true, message: 'Data fill completed successfully' };
   } catch (error) {
     console.error('Error filling attendance data:', error);

@@ -1,9 +1,9 @@
 const axios = require('axios');
 const httpStatus = require('http-status');
 
-// const BASE_URL = 'http://ec2-15-207-115-92.ap-south-1.compute.amazonaws.com:3000/api/v1';
+const BASE_URL = 'http://ec2-15-207-115-92.ap-south-1.compute.amazonaws.com:3000/api/v1';
 // const BASE_URL = 'http://localhost:3000/api/v1';
-const BASE_URL = 'https://attendance-system-20ba2l8kg-teenpreneurteenceptxyzs-projects.vercel.app/api/v1';
+// const BASE_URL = 'https://15.207.115.92.nip.io/api/v1';
 
 let JWT_TOKEN = null;
 

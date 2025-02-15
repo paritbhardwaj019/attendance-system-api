@@ -5,6 +5,7 @@ const { hashPassword } = require('../utils/utils');
 const { ROLES } = require('../config/roles');
 const cameraService = require('./camera.service');
 const { getNextCode } = require('./systemCode.service');
+const { encrypt, decrypt } = require('../utils/encryption');
 
 /**
  * Handler to create a new user.
@@ -22,11 +23,15 @@ const createUserHandler = async (userData) => {
 
   return await db.$transaction(
     async (prisma) => {
+      const hashedPassword = await hashPassword(userData.password);
+      const encryptedPlainPassword = encrypt(userData.password);
+
       const user = await prisma.user.create({
         data: {
           name: userData.name,
           username: userData.username,
-          password: await hashPassword(userData.password),
+          password: hashedPassword,
+          encryptedPlainPassword,
           mobile_number: userData.mobile_number,
           role: {
             connect: { name: userData.user_type },
@@ -61,7 +66,6 @@ const createUserHandler = async (userData) => {
           break;
 
         case ROLES.CONTRACTOR:
-          console.log("userData",userData);
           employeeNo = await getNextCode('CONTRACTOR');
           await prisma.contractor.create({
             data: {
@@ -122,6 +126,7 @@ const createUserHandler = async (userData) => {
       }
 
       delete createdUser.password;
+      delete createdUser.encryptedPlainPassword;
       return createdUser;
     },
     {
@@ -384,11 +389,72 @@ const deleteUserHandler = async (id) => {
   return true;
 };
 
+const getUsersWithPasswordsHandler = async (filters = {}) => {
+  const { manager = false, contractor = false, visitor = false, search } = filters;
+
+  const roleFilter = [];
+  if (manager) roleFilter.push({ role: { name: ROLES.MANAGER } });
+  if (contractor) roleFilter.push({ role: { name: ROLES.CONTRACTOR } });
+  if (visitor) roleFilter.push({ role: { name: ROLES.VISITOR } });
+
+  if (roleFilter.length === 0) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Select at least one user type');
+  }
+
+  const whereClause = {
+    AND: [{ OR: roleFilter }, { role: { name: { not: ROLES.LABOUR } } }],
+    ...(search && {
+      OR: [{ name: { contains: search } }, { username: { contains: search } }, { mobile_number: { contains: search } }],
+    }),
+  };
+
+  const users = await db.user.findMany({
+    where: whereClause,
+    select: {
+      id: true,
+      name: true,
+      username: true,
+      mobile_number: true,
+      encryptedPlainPassword: true,
+      role: {
+        select: {
+          name: true,
+        },
+      },
+      manager: {
+        select: {
+          employeeNo: true,
+        },
+      },
+      contractor: {
+        select: {
+          employeeNo: true,
+          firm_name: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  return {
+    data: users.map((user) => ({
+      ...user,
+      plainPassword: user.encryptedPlainPassword ? decrypt(user.encryptedPlainPassword) : null,
+      employeeNo: user.manager?.employeeNo || user.contractor?.employeeNo,
+      firm_name: user.contractor?.firm_name || null,
+      encryptedPlainPassword: undefined,
+    })),
+  };
+};
+
 const userService = {
   createUserHandler,
   fetchUsersHandler,
   fetchUserByIdHandler,
   deleteUserHandler,
+  getUsersWithPasswordsHandler,
 };
 
 module.exports = userService;

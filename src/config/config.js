@@ -13,6 +13,7 @@ const envVarsSchema = Joi.object()
     FRONTEND_URL: Joi.string().required().description('Frontend URL'),
     DIGEST_AUTH_USERNAME: Joi.string().required().description('Digest auth username'),
     DIGEST_AUTH_PASSWORD: Joi.string().required().description('Digest auth password'),
+    ENCRYPTION_KEY: Joi.string().required().length(32).description('32 character encryption key for password encryption'),
   })
   .unknown();
 
@@ -34,5 +35,8 @@ module.exports = {
     username: envVars.DIGEST_AUTH_USERNAME,
     password: envVars.DIGEST_AUTH_PASSWORD,
     algorithm: 'MD5',
+  },
+  encryption: {
+    key: envVars.ENCRYPTION_KEY,
   },
 };

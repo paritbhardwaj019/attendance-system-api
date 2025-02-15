@@ -6,6 +6,8 @@ const { ROLES } = require('../../config/roles');
 
 const userRouter = express.Router();
 
+userRouter.route('/with-passwords').get(checkJWT, checkRole([ROLES.ADMIN]), userController.getUsersWithPasswords);
+
 userRouter
   .route('/')
   .post(checkJWT, checkRole([ROLES.ADMIN]), userController.createUser)

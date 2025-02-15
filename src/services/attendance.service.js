@@ -222,20 +222,15 @@ const fetchAndStoreAttendance = async () => {
     ]);
 
     // Create attendance map for quick lookup
-    const attendanceMap = new Map(
-      attendanceRecords.map(record => [record.labourId, record])
-    );
+    const attendanceMap = new Map(attendanceRecords.map((record) => [record.labourId, record]));
 
     // Get camera data for last 30 minutes
     const cameraData = await getDCameraResult();
-    console.log('Camera records found:', cameraData.length);
 
     // Process each labour
     for (const labour of labours) {
       // Find camera records for this labour
-      const cameraRecords = cameraData.filter(
-        record => record.employeeNoString === labour.employeeNo
-      );
+      const cameraRecords = cameraData.filter((record) => record.employeeNoString === labour.employeeNo);
 
       let attendanceRecord = attendanceMap.get(labour.id);
       let inTime = attendanceRecord?.inTime || null;
@@ -295,18 +290,13 @@ const fetchAndStoreAttendance = async () => {
       }
     }
 
-    console.log('Attendance records processed successfully');
     return {
       success: true,
       message: 'Attendance records stored successfully',
     };
-
   } catch (error) {
     console.error('Error in fetchAndStoreAttendance:', error);
-    throw new ApiError(
-      httpStatus.INTERNAL_SERVER_ERROR,
-      'Failed to fetch and store attendance: ' + error.message
-    );
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to fetch and store attendance: ' + error.message);
   }
 };
 
@@ -449,7 +439,7 @@ const attendanceService = {
   // getAttendanceRecords,
   getAttendanceRecordsForManagerAndContractors,
   fetchAndStoreAttendance,
-  initializeAttendanceCron
+  initializeAttendanceCron,
 };
 
 module.exports = attendanceService;

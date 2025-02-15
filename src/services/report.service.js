@@ -38,8 +38,6 @@ const fetchLabourReportHandler = async (filters = {}) => {
 
   const isToday = formattedStartDate === today;
 
-  console.log('isToday', isToday);
-
   let attendanceRecords;
 
   if (isToday) {
@@ -62,8 +60,6 @@ const fetchLabourReportHandler = async (filters = {}) => {
       }
     }
   } else {
-    console.log(formattedEndDate, formattedStartDate);
-
     const startDateTime = new Date(formattedStartDate);
     const endDateTime = new Date(formattedEndDate);
     endDateTime.setHours(23, 59, 59, 999);
@@ -460,9 +456,11 @@ const fetchDailyReportHandler = async (filters) => {
 
     // Get all labours with their contractor info
     const labours = await db.labour.findMany({
-      where: contractorId ? {
-        contractorId: parseInt(contractorId, 10)
-      } : {},
+      where: contractorId
+        ? {
+            contractorId: parseInt(contractorId, 10),
+          }
+        : {},
       include: {
         user: {
           select: {
@@ -497,14 +495,12 @@ const fetchDailyReportHandler = async (filters) => {
     });
 
     // Create attendance map for quick lookup
-    const attendanceMap = new Map(
-      attendanceRecords.map(record => [record.labourId, record])
-    );
+    const attendanceMap = new Map(attendanceRecords.map((record) => [record.labourId, record]));
 
     // Process each labour and their attendance
-    const processedRecords = labours.map(labour => {
+    const processedRecords = labours.map((labour) => {
       const attendanceRecord = attendanceMap.get(labour.id);
-      
+
       // Calculate working hours if attendance exists
       let workingHours = 0;
       if (attendanceRecord?.inTime && attendanceRecord?.outTime) {
@@ -555,17 +551,14 @@ const fetchDailyReportHandler = async (filters) => {
     };
   } catch (error) {
     console.error('Error in fetchDailyReportHandler:', error);
-    throw new ApiError(
-      httpStatus.BAD_REQUEST,
-      'Failed to fetch daily report: ' + error.message
-    );
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Failed to fetch daily report: ' + error.message);
   }
 };
 
 const fetchCustomReportHandler = async (filters) => {
   try {
     const { startDate, endDate, contractorId } = filters;
-    
+
     if (!startDate || !endDate) {
       throw new ApiError(httpStatus.BAD_REQUEST, 'Both startDate and endDate are required');
     }
@@ -575,9 +568,11 @@ const fetchCustomReportHandler = async (filters) => {
 
     // Get all labours with their contractor info
     const labours = await db.labour.findMany({
-      where: contractorId ? {
-        contractorId: parseInt(contractorId, 10)
-      } : {},
+      where: contractorId
+        ? {
+            contractorId: parseInt(contractorId, 10),
+          }
+        : {},
       include: {
         user: {
           select: {
@@ -613,7 +608,7 @@ const fetchCustomReportHandler = async (filters) => {
 
     // Create attendance map for quick lookup, grouped by date and labourId
     const attendanceMap = new Map();
-    attendanceRecords.forEach(record => {
+    attendanceRecords.forEach((record) => {
       const dateString = record.date.toISOString().split('T')[0];
       if (!attendanceMap.has(dateString)) {
         attendanceMap.set(dateString, new Map());
@@ -631,10 +626,10 @@ const fetchCustomReportHandler = async (filters) => {
 
     // Process each labour for each date
     const processedRecords = [];
-    labours.forEach(labour => {
-      dateRange.forEach(date => {
+    labours.forEach((labour) => {
+      dateRange.forEach((date) => {
         const attendanceRecord = attendanceMap.get(date)?.get(labour.id);
-        
+
         // Calculate working hours if attendance exists
         let workingHours = 0;
         if (attendanceRecord?.inTime && attendanceRecord?.outTime) {
@@ -656,14 +651,14 @@ const fetchCustomReportHandler = async (filters) => {
     });
 
     // Calculate summary
-  
+
     const summary = processedRecords.reduce(
       (acc, record) => ({
         totalHours: acc.totalHours + (record.hours || 0),
         totalLabours: acc.totalLabours + (record.date === dateRange[0] ? 1 : 0), // Count unique labours only once
         presentCount: acc.presentCount + (record.inTime ? 1 : 0),
         absentCount: acc.absentCount + (record.inTime ? 0 : 1),
-        totalDays: dateRange.length
+        totalDays: dateRange.length,
       }),
       { totalHours: 0, totalLabours: 0, presentCount: 0, absentCount: 0, totalDays: 0 }
     );
@@ -689,18 +684,14 @@ const fetchCustomReportHandler = async (filters) => {
         { field: 'date', headerName: 'Date', width: 150 },
       ],
     };
-
   } catch (error) {
     console.error('Error in fetchCustomReportHandler:', error);
-    throw new ApiError(
-      error.statusCode || httpStatus.BAD_REQUEST,
-      'Failed to fetch custom report: ' + error.message
-    );
+    throw new ApiError(error.statusCode || httpStatus.BAD_REQUEST, 'Failed to fetch custom report: ' + error.message);
   }
 };
 
 const fetchContractorReport = async (filters) => {
-  const { startDate, endDate, contractorId} = filters;
+  const { startDate, endDate, contractorId } = filters;
   const report = await fetchDailyReportHandler({ startDate, endDate, contractorId });
   return report;
 };
@@ -711,27 +702,25 @@ const fetchContractorDailyReport = async (filters) => {
 
   // Fetch all contractors from the contractors table
   const contractors = await db.contractor.findMany({
+    select: {
+      user: {
         select: {
-          user: {
-            select: {
-              name: true,
-            },
-          },
-   employeeNo: true,  
-   id: true
+          name: true,
         },
+      },
+      employeeNo: true,
+      id: true,
+    },
   });
   // Initialize a map to aggregate data by contractor
   const contractorMap = new Map();
 
   // Process each record to group by contractor
-  report.data.forEach(record => {
+  report.data.forEach((record) => {
     const contractorId = record.contractorId;
-    console.log("contractorId",contractorId);
     // Check if contractor exists in the contractors data
-    const contractor = contractors.find(c => c.id === contractorId);
-    const contractorName = contractor ? contractor.user.name : "Unknown"; // Get contractor name or set to "Unknown"
-    console.log("contractor details",contractor);
+    const contractor = contractors.find((c) => c.id === contractorId);
+    const contractorName = contractor ? contractor.user.name : 'Unknown'; // Get contractor name or set to "Unknown"
     if (!contractorMap.has(contractorId)) {
       contractorMap.set(contractorId, {
         contractorId: contractorId,
@@ -740,7 +729,7 @@ const fetchContractorDailyReport = async (filters) => {
         totalWorkingHours: 0,
         name: contractor.user.name, // Assuming name is available in the record
         date: record.date,
-        siteCode: contractor.siteCode ?? "-",
+        siteCode: contractor.siteCode ?? '-',
       });
     }
 
@@ -762,7 +751,7 @@ const fetchContractorDailyReport = async (filters) => {
     endDate: startDate,
     average_hours_per_day: report.summary.averageHoursPerDay,
     total_days: report.summary.totalDays,
-    is_summarized: "false",
+    is_summarized: 'false',
   };
 
   return {
@@ -772,12 +761,12 @@ const fetchContractorDailyReport = async (filters) => {
       { field: 'contractorId', headerName: 'Contractor ID', width: 100, visible: true },
       { field: 'employeeNo', headerName: 'Employee No', width: 100, visible: true },
       { field: 'totalWorkingHours', headerName: 'Total Working Hours', width: 100, visible: true },
-      { field: 'name', headerName: 'Name', width: 100 , visible: true},
-      { field: 'siteCode', headerName: 'Site Code', width: 100 , visible: true},
+      { field: 'name', headerName: 'Name', width: 100, visible: true },
+      { field: 'siteCode', headerName: 'Site Code', width: 100, visible: true },
       { field: 'date', headerName: 'Date', width: 150, visible: true },
-      {field: 'startDate', headerName: 'Start Date', width: 150, visible: false},
-      {field: 'endDate', headerName: 'End Date', width: 150, visible: false},
-      {field: 'is_summarized', headerName: 'Is Summarized', width: 150, visible: false},
+      { field: 'startDate', headerName: 'Start Date', width: 150, visible: false },
+      { field: 'endDate', headerName: 'End Date', width: 150, visible: false },
+      { field: 'is_summarized', headerName: 'Is Summarized', width: 150, visible: false },
     ],
   };
 };
@@ -795,7 +784,7 @@ const fetchContractorCustomReport = async (filters) => {
         },
       },
       employeeNo: true,
-      id: true
+      id: true,
     },
   });
 
@@ -804,24 +793,24 @@ const fetchContractorCustomReport = async (filters) => {
   const contractorSummaryMap = new Map();
 
   // Process each record to group by contractor and date
-  report.data.forEach(record => {
+  report.data.forEach((record) => {
     const contractorId = record.contractorId;
     const dateKey = record.date;
     const mapKey = `${contractorId}-${dateKey}`;
 
     // Check if contractor exists in the contractors data
-    const contractor = contractors.find(c => c.id === contractorId);
-    const contractorName = contractor ? contractor.user.name : "Unknown";
+    const contractor = contractors.find((c) => c.id === contractorId);
+    const contractorName = contractor ? contractor.user.name : 'Unknown';
 
     if (!contractorDateMap.has(mapKey)) {
       contractorDateMap.set(mapKey, {
         contractorId: contractorId,
         firmName: contractorName,
-        employeeNo: contractor?.employeeNo || "-",
+        employeeNo: contractor?.employeeNo || '-',
         totalWorkingHours: 0,
-        name: contractor?.user?.name || "Unknown",
+        name: contractor?.user?.name || 'Unknown',
         date: dateKey,
-        siteCode: contractor?.siteCode || "-",
+        siteCode: contractor?.siteCode || '-',
       });
     }
 
@@ -834,12 +823,12 @@ const fetchContractorCustomReport = async (filters) => {
       contractorSummaryMap.set(contractorId, {
         contractorId: contractorId,
         firmName: contractorName,
-        employeeNo: contractor?.employeeNo || "-",
+        employeeNo: contractor?.employeeNo || '-',
         totalWorkingHours: 0,
-        name: contractor?.user?.name || "Unknown",
+        name: contractor?.user?.name || 'Unknown',
         startDate: startDate,
         endDate: endDate,
-        siteCode: contractor?.siteCode || "-",
+        siteCode: contractor?.siteCode || '-',
       });
     }
     const summaryData = contractorSummaryMap.get(contractorId);
@@ -847,22 +836,21 @@ const fetchContractorCustomReport = async (filters) => {
   });
 
   // Choose which data to use based on isSummarized flag
-  const data = isSummarized 
+  const data = isSummarized
     ? Array.from(contractorSummaryMap.values())
     : Array.from(contractorDateMap.values()).sort((a, b) => new Date(a.date) - new Date(b.date));
 
   // Calculate unique contractors and total working hours
-  const uniqueContractors = new Set(data.map(item => item.contractorId));
+  const uniqueContractors = new Set(data.map((item) => item.contractorId));
 
   const summary = {
     total_contractors: uniqueContractors.size,
     total_labours: report.summary.totalLabours,
     total_working_hours: parseFloat(data.reduce((acc, record) => acc + record.totalWorkingHours, 0).toFixed(2)),
-      start_date: startDate,
-      end_date: endDate
-  ,
+    start_date: startDate,
+    end_date: endDate,
     average_hours_per_day: parseFloat(report.summary.averageHoursPerDay.toFixed(2)),
-    total_days: report.summary.totalDays
+    total_days: report.summary.totalDays,
   };
 
   // Define columns based on isSummarized flag
@@ -872,9 +860,9 @@ const fetchContractorCustomReport = async (filters) => {
     { field: 'totalWorkingHours', headerName: 'Total Working Hours', width: 100, visible: true },
     { field: 'name', headerName: 'Name', width: 100, visible: true },
     { field: 'siteCode', headerName: 'Site Code', width: 100, visible: false },
-    { field: 'date', headerName: 'Date', width: 100, visible: isSummarized == "true" ? false : true },
-    { field: 'startDate', headerName: 'Start Date', width: 100, visible: isSummarized == "true" ? true : false },
-    { field: 'endDate', headerName: 'End Date', width: 100, visible: isSummarized == "true" ? true : false }
+    { field: 'date', headerName: 'Date', width: 100, visible: isSummarized == 'true' ? false : true },
+    { field: 'startDate', headerName: 'Start Date', width: 100, visible: isSummarized == 'true' ? true : false },
+    { field: 'endDate', headerName: 'End Date', width: 100, visible: isSummarized == 'true' ? true : false },
   ];
 
   return {

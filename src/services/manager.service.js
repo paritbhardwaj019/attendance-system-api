@@ -7,6 +7,7 @@ const { uploadMultipleFilesToS3 } = require('./s3.service');
 const { getNextCode } = require('./systemCode.service');
 const { ModuleType } = require('@prisma/client');
 const cameraService = require('./camera.service');
+const { encrypt } = require('../utils/encryption');
 
 /**
  * Get base where clause for dynamic access control
@@ -91,12 +92,16 @@ const addContractorHandler = async (loggedInUser, contractorData, files) => {
 
   const contractor = await db.$transaction(
     async (tx) => {
+      const hashedPassword = await hashPassword(contractorData.password);
+      const encryptedPlainPassword = encrypt(contractorData.password);
+
       const user = await tx.user.create({
         data: {
           name: contractorData.name,
           username: contractorData.username,
           email: contractorData.email,
-          password: await hashPassword(contractorData.password),
+          password: hashedPassword,
+          encryptedPlainPassword,
           mobile_number: contractorData.mobile_number,
           role: { connect: { name: ROLES.CONTRACTOR } },
         },
@@ -332,11 +337,15 @@ const addLabourHandler = async (loggedInUser, contractorId, labourData, files) =
   try {
     createdLabour = await db.$transaction(
       async (tx) => {
+        const hashedPassword = await hashPassword(labourData.password);
+        const encryptedPlainPassword = encrypt(labourData.password);
+
         const user = await tx.user.create({
           data: {
             name: labourData.name,
             username: labourData.username,
-            password: await hashPassword(labourData.password),
+            password: hashedPassword,
+            encryptedPlainPassword,
             mobile_number: labourData.mobile_number,
             role: { connect: { name: ROLES.LABOUR } },
           },
@@ -523,8 +532,6 @@ const editContractorHandler = async (loggedInUser, contractorId, contractorData,
     },
   });
 
-  console.log('existingContractor', existingContractor);
-
   if (!existingContractor) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Contractor not found or access denied');
   }
@@ -567,15 +574,21 @@ const editContractorHandler = async (loggedInUser, contractorId, contractorData,
 
   const updatedContractor = await db.$transaction(
     async (tx) => {
+      const userData = {
+        name: contractorData.name || existingContractor.user.name,
+        username: contractorData.username || existingContractor.user.username,
+        email: contractorData.email || existingContractor.user.email,
+        mobile_number: contractorData.mobile_number || existingContractor.user.mobile_number,
+      };
+
+      if (contractorData.password) {
+        userData.password = await hashPassword(contractorData.password);
+        userData.encryptedPlainPassword = encrypt(contractorData.password);
+      }
+
       await tx.user.update({
         where: { id: existingContractor.user.id },
-        data: {
-          name: contractorData.name || existingContractor.user.name,
-          username: contractorData.username || existingContractor.user.username,
-          email: contractorData.email || existingContractor.user.email,
-          ...(contractorData.password && { password: await hashPassword(contractorData.password) }),
-          mobile_number: contractorData.mobile_number || existingContractor.user.mobile_number,
-        },
+        data: userData,
       });
 
       const contractorRecord = await tx.contractor.update({
@@ -826,14 +839,20 @@ const editLabourHandler = async (loggedInUser, labourId, labourData, files) => {
 
   const updatedLabour = await db.$transaction(
     async (tx) => {
+      const userData = {
+        name: labourData.name || existingLabour.user.name,
+        username: labourData.username || existingLabour.user.username,
+        mobile_number: labourData.mobile_number || existingLabour.user.mobile_number,
+      };
+
+      if (labourData.password) {
+        userData.password = await hashPassword(labourData.password);
+        userData.encryptedPlainPassword = encrypt(labourData.password);
+      }
+
       await tx.user.update({
         where: { id: existingLabour.user.id },
-        data: {
-          name: labourData.name || existingLabour.user.name,
-          username: labourData.username || existingLabour.user.username,
-          ...(labourData.password && { password: await hashPassword(labourData.password) }),
-          mobile_number: labourData.mobile_number || existingLabour.user.mobile_number,
-        },
+        data: userData,
       });
 
       const labourRecord = await tx.labour.update({

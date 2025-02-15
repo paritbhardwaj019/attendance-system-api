@@ -58,7 +58,6 @@ const getAttendance = catchAsync(async (req, res) => {
 const getDailyAttendance = catchAsync(async (req, res) => {
   const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
   const contractorId = req.query.contractorId || null;
-  console.log('START DATE in controller', startDate);
   const dailyAttendance = await cameraService.getDailyAttendance(startDate, contractorId);
 
   res.status(httpStatus.OK).json(

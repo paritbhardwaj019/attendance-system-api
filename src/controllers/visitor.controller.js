@@ -25,8 +25,6 @@ const registerVisitor = catchAsync(async (req, res) => {
 
   const visitor = await visitorService.registerVisitor(req.body, userId, visitorSignupId, req.files);
 
-  console.log('VISITOR', visitor);
-
   res.status(httpStatus.CREATED).json(ApiResponse.success(httpStatus.CREATED, 'Visitor registered successfully', visitor));
 });
 
@@ -89,7 +87,7 @@ const handleVisitorEntry = catchAsync(async (req, res) => {
 
 const getVisitorRecords = catchAsync(async (req, res) => {
   const { startDate, endDate, plantId } = req.query;
-  const records = await visitorService.getVisitorRecords(startDate, endDate, plantId);
+  const records = await visitorService.getVisitorRecords(startDate, endDate, plantId ? parseInt(plantId) : undefined);
 
   res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Visitor records retrieved', records));
 });

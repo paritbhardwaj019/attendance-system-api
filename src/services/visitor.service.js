@@ -23,62 +23,113 @@ const generateQRCode = async (ticketId) => {
   try {
     return await QRCode.toDataURL(`${config.frontendUrl}/visitor/status/${ticketId}`);
   } catch (error) {
-    console.log(error);
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Error generating QR code');
   }
 };
 
 const registerVisitor = async (visitorData, userId, visitorSignupId = null, files) => {
-  try {
-    if (!visitorData.name || !visitorData.contact) {
-      throw new ApiError(httpStatus.BAD_REQUEST, 'Missing required visitor information');
-    }
+  if (!visitorData.name || !visitorData.contact) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Name and contact are required');
+  }
 
-    const ticketId = generateTicketId();
-    const startDate = visitorData.startDate ? new Date(visitorData.startDate) : null;
-    delete visitorData.startDate;
-
-    let photoUrls = [];
-
-    if (files && files.photos && files.photos.length > 0) {
-      photoUrls = await uploadMultipleFilesToS3(files.photos, 'visitor-photos');
-    }
-
-    const visitor = await db.$transaction(async (tx) => {
-      const visitorRecord = await tx.visitor.create({
-        data: {
-          ...visitorData,
-          startDate,
-          ticketId,
-          status: 'PENDING',
-          ...(visitorSignupId && { visitorSignupId }),
-          ...(userId && { createdById: userId }),
-        },
-      });
-
-      if (photoUrls.length > 0) {
-        await tx.visitorPhoto.createMany({
-          data: photoUrls.map((url) => ({
-            url,
-            visitorId: visitorRecord.id,
-          })),
-        });
-      }
-
-      return visitorRecord;
+  if (visitorData.plantId) {
+    const plant = await db.plant.findUnique({
+      where: { id: visitorData.plantId },
+      include: {
+        members: true,
+        headUser: true,
+      },
     });
 
-    const qrCodeUrl = await generateQRCode(ticketId);
-
-    return {
-      ticketId: visitor.ticketId,
-      qrCodeUrl,
-      status: visitor.status,
-      visitor,
-    };
-  } catch (error) {
-    console.log(error);
+    if (!plant) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Plant not found');
+    }
   }
+
+  const ticketId = generateTicketId();
+  const startDate = visitorData.startDate ? new Date(visitorData.startDate) : null;
+  delete visitorData.startDate;
+
+  let photoUrls = [];
+
+  if (files && files.photos && files.photos.length > 0) {
+    photoUrls = await uploadMultipleFilesToS3(files.photos, 'visitor-photos');
+  }
+
+  const visitor = await db.$transaction(async (tx) => {
+    const visitorRecord = await tx.visitor.create({
+      data: {
+        name: visitorData.name,
+        contact: visitorData.contact,
+        email: visitorData.email,
+        visitPurpose: visitorData.visitPurpose,
+        companyName: visitorData.companyName,
+        plantId: visitorData.plantId || null,
+        meetingWith: visitorData.meetingWith,
+        startDate,
+        ticketId,
+        status: 'PENDING',
+        ...(visitorSignupId && { visitorSignupId }),
+        ...(userId && { createdById: userId }),
+      },
+      include: {
+        plant: {
+          select: {
+            name: true,
+            code: true,
+            plantHead: true,
+            members: {
+              include: {
+                user: {
+                  select: {
+                    name: true,
+                    role: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (photoUrls.length > 0) {
+      await tx.visitorPhoto.createMany({
+        data: photoUrls.map((url) => ({
+          url,
+          visitorId: visitorRecord.id,
+        })),
+      });
+    }
+
+    return visitorRecord;
+  });
+
+  const qrCodeUrl = await generateQRCode(ticketId);
+
+  const response = {
+    ticketId: visitor.ticketId,
+    qrCodeUrl,
+    status: visitor.status,
+    visitor: {
+      ...visitor,
+      plant: visitor.plant
+        ? {
+            name: visitor.plant.name,
+            code: visitor.plant.code,
+            plantHead: visitor.plant.plantHead,
+            approvers: visitor.plant.members
+              .filter((member) => member.user.role.name === 'MANAGER' || member.hasAllAccess)
+              .map((member) => ({
+                name: member.user.name,
+                role: member.user.role.name,
+              })),
+          }
+        : null,
+    },
+  };
+
+  return response;
 };
 
 /**
@@ -204,6 +255,21 @@ const handleVisitorEntry = async (ticketId) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'Visitor not found');
   }
 
+  if (visitor.status !== 'APPROVED') {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only approved visitors can enter/exit the premises');
+  }
+
+  const today = new Date();
+  const visitDate = new Date(visitor.startDate);
+
+  if (
+    visitDate.getDate() !== today.getDate() ||
+    visitDate.getMonth() !== today.getMonth() ||
+    visitDate.getFullYear() !== today.getFullYear()
+  ) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Entry/exit is only allowed on the scheduled visit date');
+  }
+
   let entry = visitor.entries[0];
 
   if (!entry) {
@@ -217,6 +283,10 @@ const handleVisitorEntry = async (ticketId) => {
   }
 
   const isExit = entry.entryTime && !entry.exitTime;
+
+  if (entry.exitTime) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Visitor has already completed their visit for today');
+  }
 
   const updatedEntry = await db.visitorEntry.update({
     where: { id: entry.id },
