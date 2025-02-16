@@ -2,7 +2,7 @@ const axios = require('axios');
 const httpStatus = require('http-status');
 
 // const BASE_URL = 'http://ec2-15-207-115-92.ap-south-1.compute.amazonaws.com:3000/api/v1';
-const BASE_URL = 'http://localhost:3000/api/v1';
+const BASE_URL = 'https://15.207.115.92.nip.io/api/v1';
 let JWT_TOKEN = null;
 let VISITOR_DATA = null;
 
@@ -189,15 +189,13 @@ const getVisitorRecords = async (filters = {}) => {
 
 (async () => {
   try {
-    const adminToken = await login('whynotparit', 'b14ck-cyph3R');
+    const adminToken = await login('admin', 'admin@123');
     JWT_TOKEN = adminToken;
 
     const plant = await axios.post(
       `${BASE_URL}/plants`,
       {
         name: 'Test Plant',
-        plantHead: 'Plant Head',
-        plantHeadId: 1,
       },
       {
         headers: {

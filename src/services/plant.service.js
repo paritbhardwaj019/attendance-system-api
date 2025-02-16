@@ -2,6 +2,7 @@ const db = require('../database/prisma');
 const httpStatus = require('http-status');
 const ApiError = require('../utils/ApiError');
 const systemCodeService = require('./systemCode.service');
+const { ModuleType } = require('@prisma/client');
 
 /**
  * Create a new plant
@@ -34,7 +35,7 @@ const createPlant = async (plantData) => {
     }
   }
 
-  const plantCode = await systemCodeService.getNextCode('PLANT');
+  const plantCode = await systemCodeService.getNextCode(ModuleType.PLANT);
 
   const plant = await db.$transaction(async (tx) => {
     const createdPlant = await tx.plant.create({

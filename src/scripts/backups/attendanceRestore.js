@@ -22,7 +22,6 @@ async function main() {
     await prisma.contractor.deleteMany({});
     await prisma.admin.deleteMany({});
     await prisma.manager.deleteMany({});
-    await prisma.systemCode.deleteMany({});
     await prisma.visitorSignup.deleteMany({});
     await prisma.plant.deleteMany({});
     await prisma.user.deleteMany({});
