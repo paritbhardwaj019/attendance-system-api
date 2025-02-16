@@ -388,7 +388,6 @@ const deleteUserHandler = async (id) => {
 
   return true;
 };
-
 const getUsersWithPasswordsHandler = async (filters = {}) => {
   const { manager = false, contractor = false, visitor = false, search } = filters;
 
@@ -441,14 +440,18 @@ const getUsersWithPasswordsHandler = async (filters = {}) => {
   return {
     data: users.map((user) => ({
       ...user,
-      plainPassword: user.encryptedPlainPassword ? decrypt(user.encryptedPlainPassword) : null,
+      plainPassword:
+        user.encryptedPlainPassword === '-'
+          ? '-'
+          : user.encryptedPlainPassword
+          ? decrypt(user.encryptedPlainPassword)
+          : null,
       employeeNo: user.manager?.employeeNo || user.contractor?.employeeNo,
       firm_name: user.contractor?.firm_name || null,
       encryptedPlainPassword: undefined,
     })),
   };
 };
-
 const userService = {
   createUserHandler,
   fetchUsersHandler,
