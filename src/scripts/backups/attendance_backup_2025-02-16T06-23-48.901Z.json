@@ -1,0 +1,479 @@
+{
+  "timestamp": "2025-02-16T06:23:48.901Z",
+  "labours": [
+    {
+      "id": 1,
+      "fingerprint_data": "fingerprint_data_placeholder",
+      "aadhar_number": "111111111111",
+      "employeeNo": "LAB21",
+      "createdById": 2,
+      "updatedById": 2,
+      "createdAt": "2025-02-10T14:48:13.562Z",
+      "updatedAt": "2025-02-10T14:48:13.562Z",
+      "user": {
+        "id": 3,
+        "name": "Vis A",
+        "username": "vis_a",
+        "mobile_number": "1111111111",
+        "roleId": 4,
+        "role": {
+          "id": 4,
+          "name": "LABOUR",
+          "createdAt": "2025-02-10T14:45:54.901Z",
+          "updatedAt": "2025-02-10T14:45:54.901Z"
+        },
+        "createdAt": "2025-02-10T14:48:09.947Z",
+        "updatedAt": "2025-02-10T14:48:09.947Z",
+        "password": "$2a$10$FgDKpUrDYptLU720HiEFh.KBaEnF4XhbmdsyUfmivNdLGdftiIDbm"
+      },
+      "contractor": {
+        "id": 1,
+        "firm_name": "Sharma Builders Pvt. Ltd.",
+        "employeeNo": "CON01",
+        "managerId": null,
+        "aadhar_number": "123456789012",
+        "startDate": null,
+        "endDate": null,
+        "siteCode": null,
+        "createdAt": "2025-02-10T14:48:11.758Z",
+        "updatedAt": "2025-02-10T14:48:11.758Z",
+        "user": {
+          "id": 2,
+          "name": "Rajesh Sharma",
+          "username": "rajesh_sharma_123",
+          "mobile_number": "+919876543210",
+          "roleId": 3,
+          "role": {
+            "id": 3,
+            "name": "CONTRACTOR",
+            "createdAt": "2025-02-10T14:45:54.151Z",
+            "updatedAt": "2025-02-10T14:45:54.151Z"
+          },
+          "createdAt": "2025-02-10T14:48:09.043Z",
+          "updatedAt": "2025-02-10T14:48:09.043Z",
+          "password": "$2a$10$UwrcztDTc2QfMD.UEe69eOvoPgB.sIXA6y3OFFGcqjhNbw48ZCyLa"
+        }
+      },
+      "photos": [
+        {
+          "id": 1,
+          "url": "https://attendancebucketnew.s3.ap-south-1.amazonaws.com/labour-photos/a500bfd7-fa4d-4f17-beb1-13a6675102b7.jpeg",
+          "createdAt": "2025-02-10T14:48:13.562Z",
+          "updatedAt": "2025-02-10T14:48:13.562Z"
+        }
+      ],
+      "pdfs": [],
+      "attendance": [
+        {
+          "id": 1,
+          "inTime": "2025-01-23T04:44:33.000Z",
+          "outTime": "2025-01-23T10:45:49.000Z",
+          "workingHours": 6.02,
+          "date": "2025-01-23T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:13.562Z",
+          "updatedAt": "2025-02-10T14:48:13.562Z"
+        },
+        {
+          "id": 2,
+          "inTime": "2025-01-24T04:47:51.000Z",
+          "outTime": "2025-01-24T13:39:26.000Z",
+          "workingHours": 8.859722222222222,
+          "date": "2025-01-24T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:13.562Z",
+          "updatedAt": "2025-02-10T14:48:13.562Z"
+        },
+        {
+          "id": 3,
+          "inTime": "2025-01-25T05:15:52.000Z",
+          "outTime": "2025-01-25T10:42:24.000Z",
+          "workingHours": 5.442222222222222,
+          "date": "2025-01-25T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:13.562Z",
+          "updatedAt": "2025-02-10T14:48:13.562Z"
+        },
+        {
+          "id": 4,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-01-26T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:13.562Z",
+          "updatedAt": "2025-02-10T14:48:13.562Z"
+        },
+        {
+          "id": 5,
+          "inTime": "2025-01-27T04:41:30.000Z",
+          "outTime": "2025-01-27T14:32:49.000Z",
+          "workingHours": 9.855277777777777,
+          "date": "2025-01-27T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:13.562Z",
+          "updatedAt": "2025-02-10T14:48:13.562Z"
+        },
+        {
+          "id": 6,
+          "inTime": "2025-01-28T13:52:15.000Z",
+          "outTime": "2025-01-28T13:52:15.000Z",
+          "workingHours": 482797.8708333333,
+          "date": "2025-01-28T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:13.562Z",
+          "updatedAt": "2025-02-10T14:48:13.562Z"
+        },
+        {
+          "id": 7,
+          "inTime": "2025-01-29T04:21:21.000Z",
+          "outTime": "2025-01-29T04:21:21.000Z",
+          "workingHours": 0,
+          "date": "2025-01-29T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:13.562Z",
+          "updatedAt": "2025-02-10T14:48:13.562Z"
+        },
+        {
+          "id": 8,
+          "inTime": "2025-01-30T08:50:49.000Z",
+          "outTime": "2025-01-30T12:27:43.000Z",
+          "workingHours": 3.615,
+          "date": "2025-01-30T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:13.562Z",
+          "updatedAt": "2025-02-10T14:48:13.562Z"
+        },
+        {
+          "id": 9,
+          "inTime": "2025-01-31T07:03:40.000Z",
+          "outTime": "2025-01-31T13:37:27.000Z",
+          "workingHours": 6.563055555555556,
+          "date": "2025-01-31T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:13.562Z",
+          "updatedAt": "2025-02-10T14:48:13.562Z"
+        },
+        {
+          "id": 10,
+          "inTime": "2025-02-01T03:54:07.000Z",
+          "outTime": "2025-02-01T04:11:39.000Z",
+          "workingHours": 0.2922222222222222,
+          "date": "2025-02-01T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:13.562Z",
+          "updatedAt": "2025-02-10T14:48:13.562Z"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "fingerprint_data": "fingerprint_data_placeholder",
+      "aadhar_number": "222222222222",
+      "employeeNo": "LAB22",
+      "createdById": 2,
+      "updatedById": 2,
+      "createdAt": "2025-02-10T14:48:16.114Z",
+      "updatedAt": "2025-02-10T14:48:16.114Z",
+      "user": {
+        "id": 4,
+        "name": "Vis B",
+        "username": "vis_b",
+        "mobile_number": "2222222222",
+        "roleId": 4,
+        "role": {
+          "id": 4,
+          "name": "LABOUR",
+          "createdAt": "2025-02-10T14:45:54.901Z",
+          "updatedAt": "2025-02-10T14:45:54.901Z"
+        },
+        "createdAt": "2025-02-10T14:48:10.551Z",
+        "updatedAt": "2025-02-10T14:48:10.551Z",
+        "password": "$2a$10$2TSIU33opcvg4hDwPqIl7OmFkXMINfrZT3LEbUg3gcwdq7qVxuZ36"
+      },
+      "contractor": {
+        "id": 1,
+        "firm_name": "Sharma Builders Pvt. Ltd.",
+        "employeeNo": "CON01",
+        "managerId": null,
+        "aadhar_number": "123456789012",
+        "startDate": null,
+        "endDate": null,
+        "siteCode": null,
+        "createdAt": "2025-02-10T14:48:11.758Z",
+        "updatedAt": "2025-02-10T14:48:11.758Z",
+        "user": {
+          "id": 2,
+          "name": "Rajesh Sharma",
+          "username": "rajesh_sharma_123",
+          "mobile_number": "+919876543210",
+          "roleId": 3,
+          "role": {
+            "id": 3,
+            "name": "CONTRACTOR",
+            "createdAt": "2025-02-10T14:45:54.151Z",
+            "updatedAt": "2025-02-10T14:45:54.151Z"
+          },
+          "createdAt": "2025-02-10T14:48:09.043Z",
+          "updatedAt": "2025-02-10T14:48:09.043Z",
+          "password": "$2a$10$UwrcztDTc2QfMD.UEe69eOvoPgB.sIXA6y3OFFGcqjhNbw48ZCyLa"
+        }
+      },
+      "photos": [
+        {
+          "id": 2,
+          "url": "https://attendancebucketnew.s3.ap-south-1.amazonaws.com/labour-photos/92630706-cd92-4416-aadd-1cbbe28546f7.jpeg",
+          "createdAt": "2025-02-10T14:48:16.114Z",
+          "updatedAt": "2025-02-10T14:48:16.114Z"
+        }
+      ],
+      "pdfs": [],
+      "attendance": [
+        {
+          "id": 11,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-01-23T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:16.114Z",
+          "updatedAt": "2025-02-10T14:48:16.114Z"
+        },
+        {
+          "id": 12,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-01-24T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:16.114Z",
+          "updatedAt": "2025-02-10T14:48:16.114Z"
+        },
+        {
+          "id": 13,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-01-25T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:16.114Z",
+          "updatedAt": "2025-02-10T14:48:16.114Z"
+        },
+        {
+          "id": 14,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-01-26T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:16.114Z",
+          "updatedAt": "2025-02-10T14:48:16.114Z"
+        },
+        {
+          "id": 15,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-01-27T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:16.114Z",
+          "updatedAt": "2025-02-10T14:48:16.114Z"
+        },
+        {
+          "id": 16,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-01-28T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:16.114Z",
+          "updatedAt": "2025-02-10T14:48:16.114Z"
+        },
+        {
+          "id": 17,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-01-29T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:16.114Z",
+          "updatedAt": "2025-02-10T14:48:16.114Z"
+        },
+        {
+          "id": 18,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-01-30T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:16.114Z",
+          "updatedAt": "2025-02-10T14:48:16.114Z"
+        },
+        {
+          "id": 19,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-01-31T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:16.114Z",
+          "updatedAt": "2025-02-10T14:48:16.114Z"
+        },
+        {
+          "id": 20,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-02-01T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:16.114Z",
+          "updatedAt": "2025-02-10T14:48:16.114Z"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "fingerprint_data": "fingerprint_data_placeholder",
+      "aadhar_number": "333333333333",
+      "employeeNo": "LAB23",
+      "createdById": 2,
+      "updatedById": 2,
+      "createdAt": "2025-02-10T14:48:17.918Z",
+      "updatedAt": "2025-02-10T14:48:17.918Z",
+      "user": {
+        "id": 5,
+        "name": "Vis C",
+        "username": "vis_c",
+        "mobile_number": "3333333333",
+        "roleId": 4,
+        "role": {
+          "id": 4,
+          "name": "LABOUR",
+          "createdAt": "2025-02-10T14:45:54.901Z",
+          "updatedAt": "2025-02-10T14:45:54.901Z"
+        },
+        "createdAt": "2025-02-10T14:48:11.154Z",
+        "updatedAt": "2025-02-10T14:48:11.154Z",
+        "password": "$2a$10$1B01iZzK5z7lzcGF7jSLX.1vmyMqpIASB7Qc5Msc3UX.2FoK1Ze1C"
+      },
+      "contractor": {
+        "id": 1,
+        "firm_name": "Sharma Builders Pvt. Ltd.",
+        "employeeNo": "CON01",
+        "managerId": null,
+        "aadhar_number": "123456789012",
+        "startDate": null,
+        "endDate": null,
+        "siteCode": null,
+        "createdAt": "2025-02-10T14:48:11.758Z",
+        "updatedAt": "2025-02-10T14:48:11.758Z",
+        "user": {
+          "id": 2,
+          "name": "Rajesh Sharma",
+          "username": "rajesh_sharma_123",
+          "mobile_number": "+919876543210",
+          "roleId": 3,
+          "role": {
+            "id": 3,
+            "name": "CONTRACTOR",
+            "createdAt": "2025-02-10T14:45:54.151Z",
+            "updatedAt": "2025-02-10T14:45:54.151Z"
+          },
+          "createdAt": "2025-02-10T14:48:09.043Z",
+          "updatedAt": "2025-02-10T14:48:09.043Z",
+          "password": "$2a$10$UwrcztDTc2QfMD.UEe69eOvoPgB.sIXA6y3OFFGcqjhNbw48ZCyLa"
+        }
+      },
+      "photos": [
+        {
+          "id": 3,
+          "url": "https://attendancebucketnew.s3.ap-south-1.amazonaws.com/labour-photos/7c1faa50-9066-49c5-b958-fa28024c4f1f.jpeg",
+          "createdAt": "2025-02-10T14:48:17.918Z",
+          "updatedAt": "2025-02-10T14:48:17.918Z"
+        }
+      ],
+      "pdfs": [],
+      "attendance": [
+        {
+          "id": 21,
+          "inTime": "2025-01-22T09:13:48.000Z",
+          "outTime": "2025-01-22T12:38:24.000Z",
+          "workingHours": 3.41,
+          "date": "2025-01-22T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:17.918Z",
+          "updatedAt": "2025-02-10T14:48:17.918Z"
+        },
+        {
+          "id": 22,
+          "inTime": "2025-01-23T08:32:07.000Z",
+          "outTime": "2025-01-23T13:46:58.000Z",
+          "workingHours": 5.2475,
+          "date": "2025-01-23T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:17.918Z",
+          "updatedAt": "2025-02-10T14:48:17.918Z"
+        },
+        {
+          "id": 23,
+          "inTime": "2025-01-24T13:35:42.000Z",
+          "outTime": "2025-01-24T13:35:42.000Z",
+          "workingHours": 0,
+          "date": "2025-01-24T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:17.918Z",
+          "updatedAt": "2025-02-10T14:48:17.918Z"
+        },
+        {
+          "id": 24,
+          "inTime": "2025-01-25T05:19:25.000Z",
+          "outTime": "2025-01-25T13:39:34.000Z",
+          "workingHours": 8.335833333333333,
+          "date": "2025-01-25T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:17.918Z",
+          "updatedAt": "2025-02-10T14:48:17.918Z"
+        },
+        {
+          "id": 25,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-01-26T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:17.918Z",
+          "updatedAt": "2025-02-10T14:48:17.918Z"
+        },
+        {
+          "id": 26,
+          "inTime": "2025-01-27T07:19:14.000Z",
+          "outTime": "2025-01-27T07:19:14.000Z",
+          "workingHours": 0,
+          "date": "2025-01-27T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:17.918Z",
+          "updatedAt": "2025-02-10T14:48:17.918Z"
+        },
+        {
+          "id": 27,
+          "inTime": "2025-01-28T09:12:26.000Z",
+          "outTime": "2025-01-28T09:12:26.000Z",
+          "workingHours": 0,
+          "date": "2025-01-28T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:17.918Z",
+          "updatedAt": "2025-02-10T14:48:17.918Z"
+        },
+        {
+          "id": 28,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-01-29T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:17.918Z",
+          "updatedAt": "2025-02-10T14:48:17.918Z"
+        },
+        {
+          "id": 29,
+          "inTime": "2025-01-30T09:08:39.000Z",
+          "outTime": "2025-01-30T09:08:39.000Z",
+          "workingHours": 0,
+          "date": "2025-01-30T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:17.918Z",
+          "updatedAt": "2025-02-10T14:48:17.918Z"
+        },
+        {
+          "id": 30,
+          "inTime": "2025-01-31T12:48:16.000Z",
+          "outTime": "2025-01-31T13:44:33.000Z",
+          "workingHours": 0.9380555555555555,
+          "date": "2025-01-31T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:17.918Z",
+          "updatedAt": "2025-02-10T14:48:17.918Z"
+        },
+        {
+          "id": 31,
+          "inTime": null,
+          "outTime": null,
+          "workingHours": 0,
+          "date": "2025-02-01T00:00:00.000Z",
+          "createdAt": "2025-02-10T14:48:17.918Z",
+          "updatedAt": "2025-02-10T14:48:17.918Z"
+        }
+      ]
+    }
+  ]
+}
