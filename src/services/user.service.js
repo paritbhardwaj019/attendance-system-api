@@ -6,6 +6,7 @@ const { ROLES } = require('../config/roles');
 const cameraService = require('./camera.service');
 const { getNextCode } = require('./systemCode.service');
 const { encrypt, decrypt } = require('../utils/encryption');
+const { TABLE_HEADERS, getHeadersForView } = require('../constants/user');
 
 /**
  * Handler to create a new user.
@@ -134,6 +135,7 @@ const createUserHandler = async (userData) => {
     }
   );
 };
+
 /**
  * Handler to fetch multiple users with filters, sorting, and pagination.
  * @param {Object} filters - Filters for fetching users.
@@ -279,12 +281,29 @@ const fetchUsersHandler = async (filters = {}) => {
     where: whereClause,
   });
 
+  const headers = getHeadersForView('main');
+  const visibleHeaders = headers.filter((header) => {
+    if (header.showIf) {
+      return users.some((user) => header.showIf(user));
+    }
+    return true;
+  });
+
+  const transformedUsers = users.map((user) => {
+    const transformedUser = { id: user.id };
+    visibleHeaders.forEach((header) => {
+      transformedUser[header.key] = header.getValue ? header.getValue(user) : user[header.key];
+    });
+    return transformedUser;
+  });
+
   return {
-    data: users,
+    headers: visibleHeaders,
+    data: transformedUsers,
     pagination: {
       total: totalUsers,
-      page: page,
-      limit: limit,
+      page,
+      limit,
       totalPages: Math.ceil(totalUsers / limit),
     },
   };
@@ -388,6 +407,7 @@ const deleteUserHandler = async (id) => {
 
   return true;
 };
+
 const getUsersWithPasswordsHandler = async (filters = {}) => {
   const { manager = false, contractor = false, visitor = false, search } = filters;
 
@@ -437,21 +457,29 @@ const getUsersWithPasswordsHandler = async (filters = {}) => {
     },
   });
 
+  const transformedUsers = users.map((user) => ({
+    ...user,
+    plainPassword:
+      user.encryptedPlainPassword === '-' ? '-' : user.encryptedPlainPassword ? decrypt(user.encryptedPlainPassword) : null,
+    employeeNo: user.manager?.employeeNo || user.contractor?.employeeNo,
+    firm_name: user.contractor?.firm_name || null,
+    encryptedPlainPassword: undefined,
+  }));
+
+  const headers = getHeadersForView('password');
+  const visibleHeaders = headers.filter((header) => {
+    if (header.showIf) {
+      return transformedUsers.some((user) => header.showIf(user));
+    }
+    return true;
+  });
+
   return {
-    data: users.map((user) => ({
-      ...user,
-      plainPassword:
-        user.encryptedPlainPassword === '-'
-          ? '-'
-          : user.encryptedPlainPassword
-          ? decrypt(user.encryptedPlainPassword)
-          : null,
-      employeeNo: user.manager?.employeeNo || user.contractor?.employeeNo,
-      firm_name: user.contractor?.firm_name || null,
-      encryptedPlainPassword: undefined,
-    })),
+    headers: visibleHeaders,
+    data: transformedUsers,
   };
 };
+
 const userService = {
   createUserHandler,
   fetchUsersHandler,

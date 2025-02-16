@@ -5,9 +5,9 @@ const { hashPassword } = require('../utils/utils');
 const { ROLES } = require('../config/roles');
 const { uploadMultipleFilesToS3 } = require('./s3.service');
 const { getNextCode } = require('./systemCode.service');
-const { ModuleType } = require('@prisma/client');
 const cameraService = require('./camera.service');
 const { encrypt } = require('../utils/encryption');
+const { getHeadersForEntity } = require('../constants/manager');
 
 /**
  * Get base where clause for dynamic access control
@@ -265,13 +265,30 @@ const fetchContractorsHandler = async (filters = {}, loggedInUser) => {
     db.contractor.count({ where: whereClause }),
   ]);
 
-  const enhancedContractors = contractors.map((contractor) => ({
-    ...contractor,
-    isCreatedByMe: contractor.createdById === loggedInUser.id,
-  }));
+  const headers = getHeadersForEntity('contractor');
+  const visibleHeaders = headers.filter((header) => {
+    if (header.showIf) {
+      return contractors.some((contractor) => header.showIf(contractor));
+    }
+    return true;
+  });
+
+  const transformedContractors = contractors.map((contractor) => {
+    const transformed = {
+      id: contractor.id,
+      isCreatedByMe: contractor.createdById === loggedInUser.id,
+    };
+
+    visibleHeaders.forEach((header) => {
+      transformed[header.key] = header.getValue(contractor);
+    });
+
+    return transformed;
+  });
 
   return {
-    data: enhancedContractors,
+    headers: visibleHeaders,
+    data: transformedContractors,
     pagination: {
       total,
       page,
@@ -508,8 +525,29 @@ const getLabourHandler = async (filters = {}, loggedInUser) => {
     db.labour.count({ where: whereClause }),
   ]);
 
+  const headers = getHeadersForEntity('labour');
+  const visibleHeaders = headers.filter((header) => {
+    if (header.showIf) {
+      return labour.some((labourItem) => header.showIf(labourItem));
+    }
+    return true;
+  });
+
+  const transformedLabour = labour.map((labourItem) => {
+    const transformed = {
+      id: labourItem.id,
+    };
+
+    visibleHeaders.forEach((header) => {
+      transformed[header.key] = header.getValue(labourItem);
+    });
+
+    return transformed;
+  });
+
   return {
-    data: labour,
+    headers: visibleHeaders,
+    data: transformedLabour,
     pagination: {
       total,
       page,

@@ -2,7 +2,8 @@ const axios = require('axios');
 const httpStatus = require('http-status');
 
 // const BASE_URL = 'http://ec2-15-207-115-92.ap-south-1.compute.amazonaws.com:3000/api/v1';
-const BASE_URL = 'https://15.207.115.92.nip.io/api/v1';
+// const BASE_URL = 'https://15.207.115.92.nip.io/api/v1';
+const BASE_URL = 'http://localhost:3000/api/v1';
 let JWT_TOKEN = null;
 let VISITOR_DATA = null;
 
@@ -189,7 +190,7 @@ const getVisitorRecords = async (filters = {}) => {
 
 (async () => {
   try {
-    const adminToken = await login('admin', 'admin@123');
+    const adminToken = await login('whynotparit', 'b14ck-cyph3R');
     JWT_TOKEN = adminToken;
 
     const plant = await axios.post(
@@ -208,12 +209,12 @@ const getVisitorRecords = async (filters = {}) => {
 
     await visitorSignup({
       name: 'Test Visitor',
-      mobile_number: '80575278523',
+      mobile_number: '80575278529',
       password: 'password123',
     });
 
     const visitorLoginResponse = await visitorLogin({
-      mobile_number: '80575278523',
+      mobile_number: '80575278529',
       password: 'password123',
     });
 
@@ -221,7 +222,7 @@ const getVisitorRecords = async (filters = {}) => {
 
     const visitorRequest = await registerVisitorRequest({
       name: 'Test Visitor',
-      contact: '80575278523',
+      contact: '80575278529',
       email: 'test@example.com',
       visitPurpose: 'Meeting',
       startDate: '2025-02-16',
@@ -238,9 +239,8 @@ const getVisitorRecords = async (filters = {}) => {
       await handleVisitorEntry(visitorRequest.ticketId);
 
       const records = await getVisitorRecords({
-        startDate: '2025-02-10',
-        endDate: '2025-02-15',
-        plantId: createdPlant.id,
+        startDate: '2025-02-15',
+        endDate: '2025-02-20',
       });
 
       console.log('Visitor Records:', records);

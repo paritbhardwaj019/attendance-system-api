@@ -5,6 +5,7 @@ const ApiError = require('../utils/ApiError');
 const config = require('../config/config');
 const QRCode = require('qrcode');
 const { uploadMultipleFilesToS3 } = require('./s3.service');
+const { TABLE_HEADERS, transformData, getHeadersForView } = require('../constants/visitor');
 
 /**
  * Generate unique ticket ID
@@ -233,7 +234,17 @@ const listVisitorRequests = async (filters = {}) => {
     },
   });
 
-  return visitors;
+  const headers = getHeadersForView('requests');
+
+  return {
+    headers: headers.map((header) => ({
+      field: header.key,
+      headerName: header.label,
+      width: header.width,
+      sortable: header.sortable,
+    })),
+    data: transformData(visitors, 'requests'),
+  };
 };
 
 const handleVisitorEntry = async (ticketId) => {
@@ -246,6 +257,9 @@ const handleVisitorEntry = async (ticketId) => {
             gte: new Date(new Date().setHours(0, 0, 0, 0)),
             lte: new Date(new Date().setHours(23, 59, 59, 999)),
           },
+        },
+        orderBy: {
+          dateOfVisit: 'desc',
         },
       },
     },
@@ -270,27 +284,50 @@ const handleVisitorEntry = async (ticketId) => {
     throw new ApiError(httpStatus.FORBIDDEN, 'Entry/exit is only allowed on the scheduled visit date');
   }
 
-  let entry = visitor.entries[0];
+  const latestEntry = visitor.entries[0];
 
-  if (!entry) {
-    entry = await db.visitorEntry.create({
+  let shouldCreateNewEntry = false;
+  let isExit = false;
+
+  if (!latestEntry) {
+    shouldCreateNewEntry = true;
+  } else if (latestEntry.entryTime && latestEntry.exitTime) {
+    shouldCreateNewEntry = true;
+  } else if (latestEntry.entryTime && !latestEntry.exitTime) {
+    isExit = true;
+  }
+
+  let updatedEntry;
+
+  if (shouldCreateNewEntry) {
+    updatedEntry = await db.visitorEntry.create({
       data: {
         visitorId: visitor.id,
         plantId: visitor.plantId,
         dateOfVisit: new Date(),
+        entryTime: new Date(),
       },
+    });
+
+    isExit = false;
+  } else {
+    updatedEntry = await db.visitorEntry.update({
+      where: { id: latestEntry.id },
+      data: { exitTime: new Date() },
     });
   }
 
-  const isExit = entry.entryTime && !entry.exitTime;
-
-  if (entry.exitTime) {
-    throw new ApiError(httpStatus.FORBIDDEN, 'Visitor has already completed their visit for today');
-  }
-
-  const updatedEntry = await db.visitorEntry.update({
-    where: { id: entry.id },
-    data: isExit ? { exitTime: new Date() } : { entryTime: new Date() },
+  const allTodayEntries = await db.visitorEntry.findMany({
+    where: {
+      visitorId: visitor.id,
+      dateOfVisit: {
+        gte: new Date(new Date().setHours(0, 0, 0, 0)),
+        lte: new Date(new Date().setHours(23, 59, 59, 999)),
+      },
+    },
+    orderBy: {
+      dateOfVisit: 'desc',
+    },
   });
 
   return {
@@ -298,9 +335,18 @@ const handleVisitorEntry = async (ticketId) => {
     time: isExit ? updatedEntry.exitTime : updatedEntry.entryTime,
     visitor: visitor.name,
     ticketId: visitor.ticketId,
+    entryNumber: allTodayEntries.length,
+    todayEntries: allTodayEntries.map((entry) => ({
+      entryTime: entry.entryTime,
+      exitTime: entry.exitTime,
+      isComplete: Boolean(entry.entryTime && entry.exitTime),
+    })),
   };
 };
 
+/**
+ * Get visitor records with enhanced response including headers
+ */
 const getVisitorRecords = async (startDate, endDate, plantId) => {
   const where = {
     dateOfVisit: {
@@ -313,7 +359,7 @@ const getVisitorRecords = async (startDate, endDate, plantId) => {
     where.plantId = plantId;
   }
 
-  return db.visitorEntry.findMany({
+  const records = await db.visitorEntry.findMany({
     where,
     include: {
       visitor: true,
@@ -321,6 +367,18 @@ const getVisitorRecords = async (startDate, endDate, plantId) => {
     },
     orderBy: { dateOfVisit: 'desc' },
   });
+
+  const headers = getHeadersForView('records');
+
+  return {
+    headers: headers.map((header) => ({
+      field: header.key,
+      headerName: header.label,
+      width: header.width,
+      sortable: header.sortable,
+    })),
+    data: transformData(records, 'records'),
+  };
 };
 
 const visitorService = {
