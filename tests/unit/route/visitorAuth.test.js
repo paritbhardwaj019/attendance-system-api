@@ -209,12 +209,12 @@ const getVisitorRecords = async (filters = {}) => {
 
     await visitorSignup({
       name: 'Test Visitor',
-      mobile_number: '80575278529',
+      mobile_number: '80575278533',
       password: 'password123',
     });
 
     const visitorLoginResponse = await visitorLogin({
-      mobile_number: '80575278529',
+      mobile_number: '80575278533',
       password: 'password123',
     });
 
@@ -222,10 +222,10 @@ const getVisitorRecords = async (filters = {}) => {
 
     const visitorRequest = await registerVisitorRequest({
       name: 'Test Visitor',
-      contact: '80575278529',
+      contact: '80575278533',
       email: 'test@example.com',
       visitPurpose: 'Meeting',
-      startDate: '2025-02-16',
+      startDate: '2025-02-17',
       plantId: createdPlant.id,
       meetingWith: 'Plant Head',
       companyName: 'Test Company',
@@ -243,7 +243,10 @@ const getVisitorRecords = async (filters = {}) => {
         endDate: '2025-02-20',
       });
 
+      const requests = await listVisitorRequests();
+
       console.log('Visitor Records:', records);
+      console.log('Visitor Requests:', requests);
     }
   } catch (error) {
     console.error('Error:', error.response?.data || error.message);

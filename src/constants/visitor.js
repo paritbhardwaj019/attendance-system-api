@@ -51,7 +51,6 @@ const TABLE_HEADERS = {
     },
   ],
 
-  // Headers for visitor requests list
   VISITOR_REQUESTS: [
     {
       key: 'ticketId',
@@ -114,7 +113,29 @@ const TABLE_HEADERS = {
       label: 'Photos',
       width: 100,
       sortable: false,
-      getValue: (visitor) => visitor.photos?.length || 0,
+      getValue: (visitor) => visitor.photos?.map((photo) => photo.url) || [],
+    },
+    {
+      key: 'process',
+      label: 'Process',
+      width: 100,
+      sortable: false,
+      getValue: (visitor) => ({
+        type: 'action',
+        action: 'process',
+        disabled: visitor.status !== 'PENDING',
+      }),
+    },
+    {
+      key: 'handleEntry',
+      label: 'Entry/Exit',
+      width: 100,
+      sortable: false,
+      getValue: (visitor) => ({
+        type: 'action',
+        action: 'handleEntry',
+        disabled: visitor.status !== 'APPROVED',
+      }),
     },
   ],
 };
@@ -134,7 +155,7 @@ const getHeadersForView = (viewType) => {
 };
 
 /**
- * Transform data according to headers
+ * Transform data according to headers with photo URLs included
  */
 const transformData = (data, viewType) => {
   const headers = getHeadersForView(viewType);
@@ -147,6 +168,10 @@ const transformData = (data, viewType) => {
     headers.forEach((header) => {
       transformed[header.key] = header.getValue(item);
     });
+
+    if (item.photos) {
+      transformed.photos = item.photos.map((photo) => photo.url);
+    }
 
     return transformed;
   });
