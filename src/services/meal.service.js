@@ -2,6 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('../database/prisma');
 const httpStatus = require('http-status');
 const ApiError = require('../utils/ApiError');
+const { getHeadersForView, transformData } = require('../constants/meal');
 
 /**
  * Generate unique ticket ID for meal requests
@@ -33,14 +34,33 @@ const createMeal = async (mealData) => {
 
 /**
  * Get all meals
- * @returns {Array} List of meals
+ * @returns {Object} List of meals with headers
  */
 const getMeals = async () => {
-  return await db.meal.findMany({
+  const meals = await db.meal.findMany({
     orderBy: {
       name: 'asc',
     },
   });
+
+  const headers = [
+    { field: 'id', headerName: 'ID', width: 80, sortable: true },
+    { field: 'name', headerName: 'Meal Name', width: 200, sortable: true },
+    { field: 'price', headerName: 'Price', width: 120, sortable: true },
+    { field: 'createdAt', headerName: 'Created At', width: 180, sortable: true },
+    { field: 'updatedAt', headerName: 'Updated At', width: 180, sortable: true },
+  ];
+
+  return {
+    headers,
+    data: meals.map((meal) => ({
+      id: meal.id,
+      name: meal.name,
+      price: meal.price,
+      createdAt: meal.createdAt,
+      updatedAt: meal.updatedAt,
+    })),
+  };
 };
 
 /**
@@ -196,6 +216,8 @@ const getMealRequestStatus = async (ticketId) => {
  * @returns {Object} Updated meal entry details
  */
 const handleMealEntry = async (ticketId) => {
+  console.log('TICKET ID', ticketId);
+
   const mealRequest = await db.mealRequest.findUnique({
     where: { ticketId },
     include: {
@@ -212,6 +234,8 @@ const handleMealEntry = async (ticketId) => {
       },
     },
   });
+
+  console.log('mealRequest', mealRequest);
 
   if (!mealRequest) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Meal request not found');
@@ -238,8 +262,16 @@ const handleMealEntry = async (ticketId) => {
   if (shouldCreateNewEntry) {
     updatedEntry = await db.mealEntry.create({
       data: {
-        mealRequestId: mealRequest.id,
-        plantId: mealRequest.plantId,
+        mealRequest: {
+          connect: {
+            id: mealRequest.id,
+          },
+        },
+        plant: {
+          connect: {
+            id: mealRequest.plantId,
+          },
+        },
         dateOfMeal: new Date(),
         serveTime: new Date(),
       },
@@ -303,23 +335,35 @@ const listMealRequests = async (filters = {}) => {
     },
   });
 
-  return mealRequests;
+  const headers = getHeadersForView('requests');
+
+  return {
+    headers: headers.map((header) => ({
+      field: header.key,
+      headerName: header.label,
+      width: header.width,
+      sortable: header.sortable,
+    })),
+    data: transformData(mealRequests, 'requests'),
+  };
 };
 
 /**
  * Get meal consumption records
- * @param {string} startDate
- * @param {string} endDate
- * @param {number} plantId
+ * @param {string} [startDate] - Optional start date
+ * @param {string} [endDate] - Optional end date
+ * @param {number} [plantId] - Optional plant ID
  * @returns {Object} Meal consumption records
  */
 const getMealRecords = async (startDate, endDate, plantId) => {
-  const where = {
-    dateOfMeal: {
+  const where = {};
+
+  if (startDate && endDate) {
+    where.dateOfMeal = {
       gte: new Date(startDate),
       lte: new Date(endDate),
-    },
-  };
+    };
+  }
 
   if (plantId) {
     where.plantId = plantId;
@@ -343,7 +387,17 @@ const getMealRecords = async (startDate, endDate, plantId) => {
     orderBy: { dateOfMeal: 'desc' },
   });
 
-  return records;
+  const headers = getHeadersForView('records');
+
+  return {
+    headers: headers.map((header) => ({
+      field: header.key,
+      headerName: header.label,
+      width: header.width,
+      sortable: header.sortable,
+    })),
+    data: transformData(records, 'records'),
+  };
 };
 
 const mealService = {
