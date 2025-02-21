@@ -9,6 +9,7 @@ const reportRouter = require('./report.route');
 const visitorAuthRouter = require('./visitorAuth.route');
 const plantRouter = require('./plant.route');
 const dashboardRouter = require('./dashboard.route');
+const mealRouter = require('./meal.route');
 
 const router = express.Router();
 
@@ -52,6 +53,10 @@ const defaultRoutes = [
   {
     path: '/dashboard',
     route: dashboardRouter,
+  },
+  {
+    path: '/meals',
+    route: mealRouter,
   },
 ];
 

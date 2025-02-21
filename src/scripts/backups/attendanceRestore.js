@@ -24,6 +24,7 @@ async function main() {
     await prisma.manager.deleteMany({});
     await prisma.visitorSignup.deleteMany({});
     await prisma.plant.deleteMany({});
+    await prisma.systemCode.deleteMany({});
     await prisma.user.deleteMany({});
 
     const roles = new Map();
