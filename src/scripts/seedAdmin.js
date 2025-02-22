@@ -3,6 +3,7 @@ const prompt = require('prompt');
 const { hashPassword } = require('../utils/utils');
 const logger = require('../config/logger');
 const { ROLES } = require('../config/roles');
+const db = require('../database/prisma');
 
 const prisma = new PrismaClient();
 
@@ -76,6 +77,9 @@ const checkExistingAdmin = async (adminRole) => {
   });
 
   if (existingAdmin) {
+    await db.user.delete({
+      where: { id: existingAdmin.id },
+    });
     throw new Error(`${ADMIN_ERRORS.ADMIN_EXISTS} ${existingAdmin.username}`);
   }
 };
