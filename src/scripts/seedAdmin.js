@@ -77,9 +77,6 @@ const checkExistingAdmin = async (adminRole) => {
   });
 
   if (existingAdmin) {
-    await db.user.delete({
-      where: { id: existingAdmin.id },
-    });
     throw new Error(`${ADMIN_ERRORS.ADMIN_EXISTS} ${existingAdmin.username}`);
   }
 };
