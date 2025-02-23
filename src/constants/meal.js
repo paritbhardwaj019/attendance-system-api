@@ -20,6 +20,13 @@ const TABLE_HEADERS = {
     { key: 'consumeTime', label: 'Consume Time', width: 180, sortable: true },
     { key: 'status', label: 'Status', width: 120, sortable: true },
   ],
+  meals: [
+    { key: 'id', label: 'ID', width: 80, sortable: true },
+    { key: 'name', label: 'Meal Name', width: 200, sortable: true },
+    { key: 'price', label: 'Price', width: 120, sortable: true },
+    { key: 'createdAt', label: 'Created At', width: 180, sortable: true },
+    { key: 'updatedAt', label: 'Updated At', width: 180, sortable: true },
+  ],
 };
 
 const transformData = (data, view) => {
@@ -49,6 +56,15 @@ const transformData = (data, view) => {
         serveTime: item.serveTime,
         consumeTime: item.consumeTime,
         status: item.consumeTime ? 'CONSUMED' : item.serveTime ? 'SERVED' : 'PENDING',
+      }));
+
+    case 'meals':
+      return data.map((meal) => ({
+        id: meal.id,
+        name: meal.name,
+        price: meal.price,
+        createdAt: meal.createdAt,
+        updatedAt: meal.updatedAt,
       }));
 
     default:

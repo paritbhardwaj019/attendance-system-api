@@ -7,13 +7,16 @@ const cameraService = require('./camera.service');
 const { getNextCode } = require('./systemCode.service');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { TABLE_HEADERS, getHeadersForView } = require('../constants/user');
+const { connect } = require('mongoose');
 
 /**
  * Handler to create a new user.
  * @param {Object} data - Data for the new user.
  * @returns {Object} Created user without password.
  */
-const createUserHandler = async (data) => {
+const createUserHandler = async (data, loggedInUser) => {
+  console.log('DATA', data);
+
   const existingUser = await db.user.findUnique({
     where: { username: data.username },
   });
@@ -67,38 +70,74 @@ const createUserHandler = async (data) => {
           break;
 
         case ROLES.CONTRACTOR:
+          if (!data.aadhar_number) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Aadhar number is required for Contractor');
+          }
+
           employeeNo = await getNextCode('CONTRACTOR');
           await prisma.contractor.create({
             data: {
               user: { connect: { id: user.id } },
               firm_name: data.firm_name,
               employeeNo,
-              manager: data.manager_id
-                ? {
-                    connect: { id: data.manager_id },
-                  }
-                : undefined,
+              aadhar_number: data.aadhar_number,
+              createdBy: { connect: { id: loggedInUser.id } },
+              updatedBy: { connect: { id: loggedInUser.id } },
+              ...(data.manager_id && {
+                manager: {
+                  connect: {
+                    id: data.manager_id,
+                  },
+                },
+              }),
+              ...(data.start_date && { startDate: new Date(data.start_date) }),
+              ...(data.end_date && { endDate: new Date(data.end_date) }),
+              ...(data.site_code && { siteCode: data.site_code }),
             },
           });
           break;
 
         case ROLES.LABOUR:
-          if (!data.contractor_id || !data.fingerprint_data) {
-            throw new ApiError(httpStatus.BAD_REQUEST, 'Contractor ID and fingerprint data required for Labour');
+          if (!data.contractor_id || !data.fingerprint_data || !data.aadhar_number) {
+            throw new ApiError(
+              httpStatus.BAD_REQUEST,
+              'Contractor ID, fingerprint data, and aadhar number are required for Labour'
+            );
           }
+
+          const contractor = await prisma.contractor.findUnique({
+            where: { id: data.contractor_id },
+          });
+
+          if (!contractor) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid contractor ID');
+          }
+
           employeeNo = await getNextCode('LABOUR');
           await prisma.labour.create({
             data: {
               user: { connect: { id: user.id } },
               contractor: { connect: { id: data.contractor_id } },
               fingerprint_data: data.fingerprint_data,
+              aadhar_number: data.aadhar_number,
               employeeNo,
+              createdBy: { connect: { id: loggedInUser.id } },
+              updatedBy: { connect: { id: loggedInUser.id } },
             },
           });
           await cameraService.addUserToCamera(employeeNo, user.name);
           break;
 
         case ROLES.EMPLOYEE:
+          if (data.plant_id) {
+            const plant = await prisma.plant.findUnique({
+              where: { id: data.plant_id },
+            });
+            if (!plant) {
+              throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid plant ID');
+            }
+          }
+
           employeeNo = await getNextCode('EMPLOYEE');
           await prisma.employee.create({
             data: {
@@ -106,11 +145,11 @@ const createUserHandler = async (data) => {
               employeeNo,
               department: data.department,
               designation: data.designation,
-              plant: data.plant_id
-                ? {
-                    connect: { id: data.plant_id },
-                  }
-                : undefined,
+              ...(data.plant_id && {
+                plant: {
+                  connect: { id: data.plant_id },
+                },
+              }),
             },
           });
           break;
@@ -149,7 +188,6 @@ const createUserHandler = async (data) => {
     }
   );
 };
-
 /**
  * Handler to fetch multiple users with filters, sorting, and pagination.
  * @param {Object} filters - Filters for fetching users.
@@ -218,6 +256,17 @@ const fetchUsersHandler = async (filters = {}) => {
           userId: true,
           contractors: true,
           _count: true,
+        },
+      },
+      employee: {
+        // Added employee selection
+        select: {
+          id: true,
+          userId: true,
+          employeeNo: true,
+          department: true,
+          designation: true,
+          plantId: true,
         },
       },
       contractor: {
@@ -335,6 +384,7 @@ const fetchUserByIdHandler = async (userId) => {
       role: true,
       admin: true,
       manager: true,
+      employee: true,
       contractor: {
         include: {
           manager: true,
@@ -365,35 +415,28 @@ const fetchUserByIdHandler = async (userId) => {
  */
 
 const deleteUserHandler = async (id) => {
+  const userId = parseInt(id, 10);
+  if (isNaN(userId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid user ID');
+  }
+
   const user = await fetchUserByIdHandler(id);
 
   await db.$transaction(async (prisma) => {
     switch (user.role.name) {
       case ROLES.ADMIN:
         await prisma.admin.delete({
-          where: {
-            user: {
-              id,
-            },
-          },
+          where: { userId: id },
         });
         break;
       case ROLES.MANAGER:
         await prisma.manager.delete({
-          where: {
-            user: {
-              id,
-            },
-          },
+          where: { userId: id },
         });
         break;
       case ROLES.CONTRACTOR:
         await prisma.contractor.delete({
-          where: {
-            user: {
-              id,
-            },
-          },
+          where: { userId: id },
         });
         break;
       case ROLES.LABOUR:
@@ -405,11 +448,12 @@ const deleteUserHandler = async (id) => {
           },
         });
         await prisma.labour.delete({
-          where: {
-            user: {
-              id,
-            },
-          },
+          where: { userId: id },
+        });
+        break;
+      case ROLES.EMPLOYEE:
+        await prisma.employee.delete({
+          where: { userId: id },
         });
         break;
       default:
@@ -423,12 +467,13 @@ const deleteUserHandler = async (id) => {
 };
 
 const getUsersWithPasswordsHandler = async (filters = {}) => {
-  const { manager = false, contractor = false, visitor = false, search } = filters;
+  const { manager = false, contractor = false, visitor = false, employee = false, search } = filters;
 
   const roleFilter = [];
   if (manager) roleFilter.push({ role: { name: ROLES.MANAGER } });
   if (contractor) roleFilter.push({ role: { name: ROLES.CONTRACTOR } });
   if (visitor) roleFilter.push({ role: { name: ROLES.VISITOR } });
+  if (employee) roleFilter.push({ role: { name: ROLES.EMPLOYEE } });
 
   if (roleFilter.length === 0) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Select at least one user type');
@@ -463,6 +508,13 @@ const getUsersWithPasswordsHandler = async (filters = {}) => {
         select: {
           employeeNo: true,
           firm_name: true,
+        },
+      },
+      employee: {
+        select: {
+          employeeNo: true,
+          department: true,
+          designation: true,
         },
       },
     },

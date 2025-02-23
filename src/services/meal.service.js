@@ -44,23 +44,11 @@ const getMeals = async () => {
     },
   });
 
-  const headers = [
-    { field: 'id', headerName: 'ID', width: 80, sortable: true },
-    { field: 'name', headerName: 'Meal Name', width: 200, sortable: true },
-    { field: 'price', headerName: 'Price', width: 120, sortable: true },
-    { field: 'createdAt', headerName: 'Created At', width: 180, sortable: true },
-    { field: 'updatedAt', headerName: 'Updated At', width: 180, sortable: true },
-  ];
+  const headers = getHeadersForView('meals');
 
   return {
     headers,
-    data: meals.map((meal) => ({
-      id: meal.id,
-      name: meal.name,
-      price: meal.price,
-      createdAt: meal.createdAt,
-      updatedAt: meal.updatedAt,
-    })),
+    data: transformData(meals, 'meals'),
   };
 };
 
@@ -124,14 +112,22 @@ const requestMeal = async (requestData, loggedInUser) => {
 
   const mealRequest = await db.mealRequest.create({
     data: {
-      mealId,
+      meal: {
+        connect: {
+          id: mealId,
+        },
+      },
       user: {
         connect: {
           id: loggedInUser.id,
         },
       },
       quantity,
-      plantId: plantId || null,
+      plant: {
+        connect: {
+          id: plantId,
+        },
+      },
       ticketId,
       status: 'PENDING',
     },
@@ -235,8 +231,6 @@ const getMealRequestStatus = async (ticketId) => {
  * @returns {Object} Updated meal entry details
  */
 const handleMealEntry = async (ticketId) => {
-  console.log('TICKET ID', ticketId);
-
   const mealRequest = await db.mealRequest.findUnique({
     where: { ticketId },
     include: {
@@ -253,8 +247,6 @@ const handleMealEntry = async (ticketId) => {
       },
     },
   });
-
-  console.log('mealRequest', mealRequest);
 
   if (!mealRequest) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Meal request not found');
@@ -365,7 +357,7 @@ const listMealRequests = async (filters = {}, loggedInUser) => {
     user: undefined,
   }));
 
-  const headers = [
+  let headers = [
     ...getHeadersForView('requests'),
     { key: 'department', label: 'Department', width: 150, sortable: true },
     { key: 'designation', label: 'Designation', width: 150, sortable: true },
@@ -437,6 +429,11 @@ const getMealRecords = async (startDate, endDate, plantId, loggedInUser) => {
     orderBy: { dateOfMeal: 'desc' },
   });
 
+  console.log(
+    'rECORDS',
+    records.map((el) => el.mealRequest.user)
+  );
+
   const flattenedRecords = records.map((record) => ({
     ...record,
     userName: record.mealRequest.user.name,
@@ -445,11 +442,10 @@ const getMealRecords = async (startDate, endDate, plantId, loggedInUser) => {
     employeeNo: record.mealRequest.user.employee?.employeeNo || null,
     mealRequest: {
       ...record.mealRequest,
-      user: undefined,
     },
   }));
 
-  const headers = [
+  let headers = [
     ...getHeadersForView('records'),
     { key: 'department', label: 'Department', width: 150, sortable: true },
     { key: 'designation', label: 'Designation', width: 150, sortable: true },
@@ -471,7 +467,7 @@ const getMealRecords = async (startDate, endDate, plantId, loggedInUser) => {
       width: header.width,
       sortable: header.sortable,
     })),
-    data: transformData(flattenedRecords, 'records'),
+    data: transformData(flattenedRecords, 'records', loggedInUser),
   };
 };
 

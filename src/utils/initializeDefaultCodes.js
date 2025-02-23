@@ -10,6 +10,7 @@ const initializeDefaultCodes = async () => {
     { moduleType: 'VISITOR', prefix: 'VIS', lastNumber: 0 },
     { moduleType: 'PERSON', prefix: 'PER', lastNumber: 0 },
     { moduleType: 'PLANT', prefix: 'PLT', lastNumber: 0 },
+    { moduleType: 'EMPLOYEE', prefix: 'EMP', lastNumber: 0 },
   ];
 
   const admin = await db.user.findFirst({

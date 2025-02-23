@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   try {
-    const backupFilePath = path.join(__dirname, '../backups/attendance_backup_2025-02-21T18-32-26.064Z.json');
+    const backupFilePath = path.join(__dirname, '../backups/attendance_backup_2025-02-23T18-04-43.749Z.json');
     const backupData = JSON.parse(fs.readFileSync(backupFilePath, 'utf8'));
 
     await prisma.attendance.deleteMany({});
