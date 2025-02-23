@@ -47,14 +47,33 @@ const validatePassword = async (inputPassword, userPassword) => {
   }
 };
 
-const createUserResponse = (user) => ({
-  id: user.id,
-  name: user.name,
-  username: user.username,
-  mobile_number: user.mobile_number,
-  role: user.role.name,
-  contractorId: user.role.name === 'CONTRACTOR' ? user.contractor?.id || null : null,
-});
+const createUserResponse = (user) => {
+  const response = {
+    id: user.id,
+    name: user.name,
+    username: user.username,
+    mobile_number: user.mobile_number,
+    role: user.role.name,
+    contractorId: null,
+    employeeId: null,
+    department: null,
+    designation: null,
+    plantId: null,
+  };
+
+  if (user.role.name === 'CONTRACTOR') {
+    response.contractorId = user.contractor?.id || null;
+  }
+
+  if (user.role.name === 'EMPLOYEE' && user.employee) {
+    response.employeeId = user.employee.id;
+    response.department = user.employee.department;
+    response.designation = user.employee.designation;
+    response.plantId = user.employee.plantId;
+  }
+
+  return response;
+};
 
 const loginWithUserNameHandler = async (data) => {
   validateLoginRequest(data);
@@ -74,6 +93,14 @@ const loginWithUserNameHandler = async (data) => {
           id: true,
         },
       },
+      employee: {
+        select: {
+          id: true,
+          department: true,
+          designation: true,
+          plantId: true,
+        },
+      },
     },
   });
 
@@ -86,10 +113,6 @@ const loginWithUserNameHandler = async (data) => {
   });
 
   const userResponse = createUserResponse(user);
-
-  if (user.role.name === 'CONTRACTOR') {
-    userResponse.contractorId = user.contractor?.id || null;
-  }
 
   return { user: userResponse, accessToken };
 };

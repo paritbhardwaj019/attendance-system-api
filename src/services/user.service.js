@@ -10,12 +10,12 @@ const { TABLE_HEADERS, getHeadersForView } = require('../constants/user');
 
 /**
  * Handler to create a new user.
- * @param {Object} userData - Data for the new user.
+ * @param {Object} data - Data for the new user.
  * @returns {Object} Created user without password.
  */
-const createUserHandler = async (userData) => {
+const createUserHandler = async (data) => {
   const existingUser = await db.user.findUnique({
-    where: { username: userData.username },
+    where: { username: data.username },
   });
 
   if (existingUser) {
@@ -24,18 +24,18 @@ const createUserHandler = async (userData) => {
 
   return await db.$transaction(
     async (prisma) => {
-      const hashedPassword = await hashPassword(userData.password);
-      const encryptedPlainPassword = encrypt(userData.password);
+      const hashedPassword = await hashPassword(data.password);
+      const encryptedPlainPassword = encrypt(data.password);
 
       const user = await prisma.user.create({
         data: {
-          name: userData.name,
-          username: userData.username,
+          name: data.name,
+          username: data.username,
           password: hashedPassword,
           encryptedPlainPassword,
-          mobile_number: userData.mobile_number,
+          mobile_number: data.mobile_number,
           role: {
-            connect: { name: userData.user_type },
+            connect: { name: data.user_type },
           },
         },
         include: {
@@ -45,7 +45,7 @@ const createUserHandler = async (userData) => {
 
       let employeeNo;
 
-      switch (userData.user_type) {
+      switch (data.user_type) {
         case ROLES.ADMIN:
           employeeNo = await getNextCode('ADMIN');
           await prisma.admin.create({
@@ -71,35 +71,48 @@ const createUserHandler = async (userData) => {
           await prisma.contractor.create({
             data: {
               user: { connect: { id: user.id } },
-              firm_name: userData.firm_name,
+              firm_name: data.firm_name,
               employeeNo,
-              // startDate: userData.startDate,
-              // endDate: userData.endDate,
-              // siteCode: userData.siteCode,
-              manager: userData.manager_id
+              manager: data.manager_id
                 ? {
-                    connect: { id: userData.manager_id },
+                    connect: { id: data.manager_id },
                   }
                 : undefined,
             },
           });
-          // await cameraService.addUserToCamera(employeeNo, user.name);
           break;
 
         case ROLES.LABOUR:
-          if (!userData.contractor_id || !userData.fingerprint_data) {
+          if (!data.contractor_id || !data.fingerprint_data) {
             throw new ApiError(httpStatus.BAD_REQUEST, 'Contractor ID and fingerprint data required for Labour');
           }
           employeeNo = await getNextCode('LABOUR');
           await prisma.labour.create({
             data: {
               user: { connect: { id: user.id } },
-              contractor: { connect: { id: userData.contractor_id } },
-              fingerprint_data: userData.fingerprint_data,
+              contractor: { connect: { id: data.contractor_id } },
+              fingerprint_data: data.fingerprint_data,
               employeeNo,
             },
           });
           await cameraService.addUserToCamera(employeeNo, user.name);
+          break;
+
+        case ROLES.EMPLOYEE:
+          employeeNo = await getNextCode('EMPLOYEE');
+          await prisma.employee.create({
+            data: {
+              user: { connect: { id: user.id } },
+              employeeNo,
+              department: data.department,
+              designation: data.designation,
+              plant: data.plant_id
+                ? {
+                    connect: { id: data.plant_id },
+                  }
+                : undefined,
+            },
+          });
           break;
 
         default:
@@ -119,6 +132,7 @@ const createUserHandler = async (userData) => {
             },
           },
           labour: true,
+          employee: true,
         },
       });
 

@@ -20,7 +20,7 @@ const deleteMeal = catchAsync(async (req, res) => {
 });
 
 const requestMeal = catchAsync(async (req, res) => {
-  const mealRequest = await mealService.requestMeal(req.body, req.user.id);
+  const mealRequest = await mealService.requestMeal(req.body, req.user);
   res
     .status(httpStatus.CREATED)
     .json(ApiResponse.success(httpStatus.CREATED, 'Meal request created successfully', mealRequest));
@@ -61,13 +61,13 @@ const listMealRequests = catchAsync(async (req, res) => {
     plantId: plantId ? parseInt(plantId) : undefined,
   };
 
-  const requests = await mealService.listMealRequests(filterOptions);
+  const requests = await mealService.listMealRequests(filterOptions, req.user);
   res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Meal requests retrieved', requests));
 });
 
 const getMealRecords = catchAsync(async (req, res) => {
   const { startDate, endDate, plantId } = req.query;
-  const records = await mealService.getMealRecords(startDate, endDate, plantId ? parseInt(plantId) : undefined);
+  const records = await mealService.getMealRecords(startDate, endDate, plantId ? parseInt(plantId) : undefined, req.user);
   res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Meal records retrieved', records));
 });
 

@@ -16,6 +16,7 @@ enum ModuleType {
   PERSON
   PLANT
   MEAL
+  EMPLOYEE
 }
 
 enum MealStatus {
@@ -23,7 +24,6 @@ enum MealStatus {
   APPROVED
   REJECTED
 }
-
 
 model Meal {
   id        Int      @id @default(autoincrement())
@@ -34,7 +34,6 @@ model Meal {
 
   mealRequests MealRequest[]
 }
-
 
 model MealRequest {
   id          Int        @id @default(autoincrement())
@@ -50,29 +49,26 @@ model MealRequest {
   plant       Plant?     @relation(fields: [plantId], references: [id])
   remarks     String?
 
-  approvedBy   User?     @relation("MealApproved", fields: [approvedById], references: [id])
+  approvedBy   User? @relation("MealApproved", fields: [approvedById], references: [id])
   approvedById Int?
 
-  entries     MealEntry[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  entries   MealEntry[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 }
 
-
 model MealEntry {
-  id           Int       @id @default(autoincrement())
+  id            Int         @id @default(autoincrement())
   mealRequestId Int
-  mealRequest  MealRequest @relation(fields: [mealRequestId], references: [id])
-  plantId      Int
-  plant        Plant      @relation(fields: [plantId], references: [id])
-  dateOfMeal   DateTime
-  serveTime    DateTime?
-  consumeTime  DateTime?
+  mealRequest   MealRequest @relation(fields: [mealRequestId], references: [id])
+  plantId       Int
+  plant         Plant       @relation(fields: [plantId], references: [id])
+  dateOfMeal    DateTime
+  serveTime     DateTime?
+  consumeTime   DateTime?
 
-
-
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([mealRequestId, dateOfMeal])
 }
@@ -128,6 +124,7 @@ model User {
   manager    Manager?
   contractor Contractor?
   labour     Labour?
+  employee   Employee?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -137,6 +134,20 @@ model User {
 
   createdSystemCodes SystemCode[] @relation("SystemCodeCreatedBy")
   updatedSystemCodes SystemCode[] @relation("SystemCodeUpdatedBy")
+}
+
+model Employee {
+  id          Int     @id @default(autoincrement())
+  user        User    @relation(fields: [userId], references: [id])
+  userId      Int     @unique
+  employeeNo  String  @unique
+  department  String?
+  designation String?
+  plantId     Int?
+  plant       Plant?  @relation(fields: [plantId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Admin {
@@ -342,6 +353,8 @@ model Plant {
 
   mealRequests MealRequest[]
   mealEntries  MealEntry[]
+
+  employees Employee[]
 
   headUser User?          @relation("PlantHead", fields: [plantHeadId], references: [id])
   members  PlantMember[]

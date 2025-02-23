@@ -3,6 +3,7 @@ const db = require('../database/prisma');
 const httpStatus = require('http-status');
 const ApiError = require('../utils/ApiError');
 const { getHeadersForView, transformData } = require('../constants/meal');
+const { connect } = require('mongoose');
 
 /**
  * Generate unique ticket ID for meal requests
@@ -94,7 +95,7 @@ const deleteMeal = async (mealId) => {
  * @param {number} userId
  * @returns {Object} Created meal request with details
  */
-const requestMeal = async (requestData, userId) => {
+const requestMeal = async (requestData, loggedInUser) => {
   const { mealId, quantity = 1, plantId } = requestData;
 
   if (!mealId) {
@@ -124,7 +125,11 @@ const requestMeal = async (requestData, userId) => {
   const mealRequest = await db.mealRequest.create({
     data: {
       mealId,
-      userId,
+      user: {
+        connect: {
+          id: loggedInUser.id,
+        },
+      },
       quantity,
       plantId: plantId || null,
       ticketId,
@@ -136,12 +141,26 @@ const requestMeal = async (requestData, userId) => {
       user: {
         select: {
           name: true,
+          employee: {
+            select: {
+              department: true,
+              designation: true,
+              employeeNo: true,
+            },
+          },
         },
       },
     },
   });
 
-  return mealRequest;
+  return {
+    ...mealRequest,
+    userName: mealRequest.user.name,
+    department: mealRequest.user.employee?.department || null,
+    designation: mealRequest.user.employee?.designation || null,
+    employeeNo: mealRequest.user.employee?.employeeNo || null,
+    user: undefined,
+  };
 };
 
 /**
@@ -290,12 +309,7 @@ const handleMealEntry = async (ticketId) => {
   };
 };
 
-/**
- * List meal requests with optional filtering
- * @param {Object} filters - Filtering options
- * @returns {Array} List of meal requests
- */
-const listMealRequests = async (filters = {}) => {
+const listMealRequests = async (filters = {}, loggedInUser) => {
   const { status, startDate, endDate, userId, plantId } = filters;
 
   const whereClause = {};
@@ -326,6 +340,13 @@ const listMealRequests = async (filters = {}) => {
       user: {
         select: {
           name: true,
+          employee: {
+            select: {
+              department: true,
+              designation: true,
+              employeeNo: true,
+            },
+          },
         },
       },
       plant: true,
@@ -335,7 +356,29 @@ const listMealRequests = async (filters = {}) => {
     },
   });
 
-  const headers = getHeadersForView('requests');
+  const flattenedRequests = mealRequests.map((request) => ({
+    ...request,
+    userName: request.user.name,
+    department: request.user.employee?.department || null,
+    designation: request.user.employee?.designation || null,
+    employeeNo: request.user.employee?.employeeNo || null,
+    user: undefined,
+  }));
+
+  const headers = [
+    ...getHeadersForView('requests'),
+    { key: 'department', label: 'Department', width: 150, sortable: true },
+    { key: 'designation', label: 'Designation', width: 150, sortable: true },
+    { key: 'employeeNo', label: 'Employee No', width: 120, sortable: true },
+  ];
+
+  if (['ADMIN', 'MANAGER'].includes(loggedInUser.role)) {
+    headers = [
+      ...headers,
+      { key: 'process', label: 'Process', width: 150, sortable: false },
+      { key: 'handleEntry', label: 'Handle Entry', width: 150, sortable: false },
+    ];
+  }
 
   return {
     headers: headers.map((header) => ({
@@ -344,7 +387,7 @@ const listMealRequests = async (filters = {}) => {
       width: header.width,
       sortable: header.sortable,
     })),
-    data: transformData(mealRequests, 'requests'),
+    data: transformData(flattenedRequests, 'requests'),
   };
 };
 
@@ -355,7 +398,7 @@ const listMealRequests = async (filters = {}) => {
  * @param {number} [plantId] - Optional plant ID
  * @returns {Object} Meal consumption records
  */
-const getMealRecords = async (startDate, endDate, plantId) => {
+const getMealRecords = async (startDate, endDate, plantId, loggedInUser) => {
   const where = {};
 
   if (startDate && endDate) {
@@ -378,6 +421,13 @@ const getMealRecords = async (startDate, endDate, plantId) => {
           user: {
             select: {
               name: true,
+              employee: {
+                select: {
+                  department: true,
+                  designation: true,
+                  employeeNo: true,
+                },
+              },
             },
           },
         },
@@ -387,7 +437,32 @@ const getMealRecords = async (startDate, endDate, plantId) => {
     orderBy: { dateOfMeal: 'desc' },
   });
 
-  const headers = getHeadersForView('records');
+  const flattenedRecords = records.map((record) => ({
+    ...record,
+    userName: record.mealRequest.user.name,
+    department: record.mealRequest.user.employee?.department || null,
+    designation: record.mealRequest.user.employee?.designation || null,
+    employeeNo: record.mealRequest.user.employee?.employeeNo || null,
+    mealRequest: {
+      ...record.mealRequest,
+      user: undefined,
+    },
+  }));
+
+  const headers = [
+    ...getHeadersForView('records'),
+    { key: 'department', label: 'Department', width: 150, sortable: true },
+    { key: 'designation', label: 'Designation', width: 150, sortable: true },
+    { key: 'employeeNo', label: 'Employee No', width: 120, sortable: true },
+  ];
+
+  if (['ADMIN', 'MANAGER'].includes(loggedInUser.role)) {
+    headers = [
+      ...headers,
+      { key: 'process', label: 'Process', width: 150, sortable: false },
+      { key: 'handleEntry', label: 'Handle Entry', width: 150, sortable: false },
+    ];
+  }
 
   return {
     headers: headers.map((header) => ({
@@ -396,7 +471,7 @@ const getMealRecords = async (startDate, endDate, plantId) => {
       width: header.width,
       sortable: header.sortable,
     })),
-    data: transformData(records, 'records'),
+    data: transformData(flattenedRecords, 'records'),
   };
 };
 
