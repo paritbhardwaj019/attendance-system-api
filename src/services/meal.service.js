@@ -354,7 +354,6 @@ const listMealRequests = async (filters = {}, loggedInUser) => {
     department: request.user.employee?.department || null,
     designation: request.user.employee?.designation || null,
     employeeNo: request.user.employee?.employeeNo || null,
-    user: undefined,
   }));
 
   let headers = [
