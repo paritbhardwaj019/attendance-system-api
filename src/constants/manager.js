@@ -1,116 +1,35 @@
 const TABLE_HEADERS = {
   COMMON: [
-    {
-      key: 'name',
-      label: 'Name',
-      sortable: true,
-      getValue: (entity) => entity.user.name,
-    },
-    {
-      key: 'username',
-      label: 'Username',
-      sortable: true,
-      getValue: (entity) => entity.user.username,
-    },
-    {
-      key: 'mobile_number',
-      label: 'Mobile Number',
-      sortable: false,
-      getValue: (entity) => entity.user.mobile_number,
-    },
-    {
-      key: 'employeeNo',
-      label: 'Employee No',
-      sortable: true,
-      getValue: (entity) => entity.employeeNo,
-    },
+    { field: 'name', headerName: 'Name', width: '150', sortable: true },
+    { field: 'username', headerName: 'Username', width: '150', sortable: true },
+    { field: 'mobile_number', headerName: 'Mobile Number', width: '150', sortable: false },
+    { field: 'employeeNo', headerName: 'Employee No', width: '150', sortable: true },
   ],
 
   CONTRACTOR: [
-    {
-      key: 'firm_name',
-      label: 'Firm Name',
-      sortable: true,
-      getValue: (contractor) => contractor.firm_name,
-    },
-    {
-      key: 'manager',
-      label: 'Manager',
-      sortable: false,
-      showIf: (contractor) => contractor.manager,
-      getValue: (contractor) => contractor.manager?.user.name,
-    },
-    {
-      key: 'aadhar_number',
-      label: 'Aadhar Number',
-      sortable: true,
-      getValue: (contractor) => contractor.aadhar_number,
-    },
-    {
-      key: 'site_details',
-      label: 'Site Details',
-      sortable: true,
-      getValue: (contractor) => contractor.siteCode,
-    },
+    { field: 'firm_name', headerName: 'Firm Name', width: '150', sortable: true },
+    { field: 'manager', headerName: 'Manager', width: '150', sortable: false },
+    { field: 'aadhar_number', headerName: 'Aadhar Number', width: '150', sortable: true },
+    { field: 'site_details', headerName: 'Site Details', width: '150', sortable: true },
   ],
 
   LABOUR: [
-    {
-      key: 'contractor',
-      label: 'Contractor',
-      sortable: false,
-      showIf: (labour) => labour.contractor,
-      getValue: (labour) => labour.contractor?.user.name,
-    },
-    {
-      key: 'contractor_firm',
-      label: 'Firm Name',
-      sortable: false,
-      showIf: (labour) => labour.contractor,
-      getValue: (labour) => labour.contractor?.firm_name,
-    },
-    {
-      key: 'aadhar_number',
-      label: 'Aadhar Number',
-      sortable: true,
-      getValue: (labour) => labour.aadhar_number,
-    },
+    { field: 'contractor', headerName: 'Contractor', width: '150', sortable: false },
+    { field: 'contractor_firm', headerName: 'Firm Name', width: '150', sortable: false },
+    { field: 'aadhar_number', headerName: 'Aadhar Number', width: '150', sortable: true },
   ],
 
   DOCUMENTS: [
-    {
-      key: 'photos',
-      label: 'Photos',
-      sortable: false,
-      getValue: (entity) => entity.photos?.length || 0,
-    },
-    {
-      key: 'pdfs',
-      label: 'Documents',
-      sortable: false,
-      getValue: (entity) => entity.pdfs?.length || 0,
-    },
+    { field: 'photos', headerName: 'Photos', width: '150', sortable: false },
+    { field: 'pdfs', headerName: 'Documents', width: '150', sortable: false },
   ],
 
   META: [
-    {
-      key: 'created_by',
-      label: 'Created By',
-      sortable: false,
-      getValue: (entity) => entity.createdBy?.name,
-    },
-    {
-      key: 'createdAt',
-      label: 'Created At',
-      sortable: true,
-      getValue: (entity) => entity.createdAt,
-    },
+    { field: 'created_by', headerName: 'Created By', width: '150', sortable: false },
+    { field: 'createdAt', headerName: 'Created At', width: '150', sortable: true },
   ],
 };
 
-/**
- * Get headers for a specific entity type with optional additional headers
- */
 const getHeadersForEntity = (entityType, additionalHeaders = []) => {
   switch (entityType) {
     case 'contractor':

@@ -237,12 +237,7 @@ const listVisitorRequests = async (filters = {}) => {
   const headers = getHeadersForView('requests');
 
   return {
-    headers: headers.map((header) => ({
-      field: header.key,
-      headerName: header.label,
-      width: header.width,
-      sortable: header.sortable,
-    })),
+    headers,
     data: transformData(visitors, 'requests'),
   };
 };
@@ -371,12 +366,7 @@ const getVisitorRecords = async (startDate, endDate, plantId) => {
   const headers = getHeadersForView('records');
 
   return {
-    headers: headers.map((header) => ({
-      field: header.key,
-      headerName: header.label,
-      width: header.width,
-      sortable: header.sortable,
-    })),
+    headers,
     data: transformData(records, 'records'),
   };
 };

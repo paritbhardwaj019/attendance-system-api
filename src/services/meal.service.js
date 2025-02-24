@@ -359,26 +359,21 @@ const listMealRequests = async (filters = {}, loggedInUser) => {
 
   let headers = [
     ...getHeadersForView('requests'),
-    { key: 'department', label: 'Department', width: 150, sortable: true },
-    { key: 'designation', label: 'Designation', width: 150, sortable: true },
-    { key: 'employeeNo', label: 'Employee No', width: 120, sortable: true },
+    { field: 'department', headerName: 'Department', width: 150, sortable: true },
+    { field: 'designation', headerName: 'Designation', width: 150, sortable: true },
+    { field: 'employeeNo', headerName: 'Employee No', width: 120, sortable: true },
   ];
 
   if (['ADMIN', 'MANAGER'].includes(loggedInUser.role)) {
     headers = [
       ...headers,
-      { key: 'process', label: 'Process', width: 150, sortable: false },
-      { key: 'handleEntry', label: 'Handle Entry', width: 150, sortable: false },
+      { field: 'process', headerName: 'Process', width: 150, sortable: false },
+      { field: 'handleEntry', headerName: 'Handle Entry', width: 150, sortable: false },
     ];
   }
 
   return {
-    headers: headers.map((header) => ({
-      field: header.key,
-      headerName: header.label,
-      width: header.width,
-      sortable: header.sortable,
-    })),
+    headers,
     data: transformData(flattenedRequests, 'requests'),
   };
 };
@@ -447,26 +442,21 @@ const getMealRecords = async (startDate, endDate, plantId, loggedInUser) => {
 
   let headers = [
     ...getHeadersForView('records'),
-    { key: 'department', label: 'Department', width: 150, sortable: true },
-    { key: 'designation', label: 'Designation', width: 150, sortable: true },
-    { key: 'employeeNo', label: 'Employee No', width: 120, sortable: true },
+    { field: 'department', fieldName: 'Department', width: 150, sortable: true },
+    { field: 'designation', fieldName: 'Designation', width: 150, sortable: true },
+    { field: 'employeeNo', fieldName: 'Employee No', width: 120, sortable: true },
   ];
 
   if (['ADMIN', 'MANAGER'].includes(loggedInUser.role)) {
     headers = [
       ...headers,
-      { key: 'process', label: 'Process', width: 150, sortable: false },
-      { key: 'handleEntry', label: 'Handle Entry', width: 150, sortable: false },
+      { field: 'process', fieldName: 'Process', width: 150, sortable: false },
+      { field: 'handleEntry', fieldName: 'Handle Entry', width: 150, sortable: false },
     ];
   }
 
   return {
-    headers: headers.map((header) => ({
-      field: header.key,
-      headerName: header.label,
-      width: header.width,
-      sortable: header.sortable,
-    })),
+    headers,
     data: transformData(flattenedRecords, 'records', loggedInUser),
   };
 };

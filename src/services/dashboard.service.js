@@ -8,83 +8,17 @@ const ApiError = require('../utils/ApiError');
  */
 const DASHBOARD_HEADERS = {
   VISITOR_LIST: [
-    {
-      key: 'ticketId',
-      label: 'Ticket ID',
-      width: 130,
-      sortable: true,
-      getValue: (visitor) => visitor.ticketId,
-    },
-    {
-      key: 'name',
-      label: 'Visitor Name',
-      width: 150,
-      sortable: true,
-      getValue: (visitor) => visitor.name,
-    },
-    {
-      key: 'contact',
-      label: 'Mobile',
-      width: 130,
-      sortable: true,
-      getValue: (visitor) => visitor.contact,
-    },
-    {
-      key: 'companyName',
-      label: 'Company',
-      width: 150,
-      sortable: true,
-      getValue: (visitor) => visitor.companyName,
-    },
-    {
-      key: 'visitPurpose',
-      label: 'Purpose',
-      width: 200,
-      sortable: true,
-      getValue: (visitor) => visitor.visitPurpose,
-    },
-    {
-      key: 'meetingWith',
-      label: 'Meeting With',
-      width: 150,
-      sortable: true,
-      getValue: (visitor) => visitor.meetingWith,
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      width: 100,
-      sortable: true,
-      getValue: (visitor) => visitor.status,
-    },
-    {
-      key: 'entryTime',
-      label: 'Entry Time',
-      width: 130,
-      sortable: true,
-      getValue: (visitor) => visitor.entries?.[0]?.entryTime || null,
-    },
-    {
-      key: 'exitTime',
-      label: 'Exit Time',
-      width: 130,
-      sortable: true,
-      getValue: (visitor) => visitor.entries?.[0]?.exitTime || null,
-    },
-    {
-      key: 'plantName',
-      label: 'Plant',
-      width: 130,
-      sortable: true,
-      getValue: (visitor) => visitor.plant?.name || '',
-    },
-    {
-      key: 'requestTime',
-      label: 'Request Time',
-      width: 130,
-      sortable: true,
-      getValue: (visitor) => visitor.requestTime,
-    },
+    { field: 'ticketId', headerName: 'Ticket ID', width: '130', sortable: true },
+    { field: 'name', headerName: 'Visitor Name', width: '150', sortable: true },
+    { field: 'contact', headerName: 'Mobile', width: '130', sortable: true },
+    { field: 'companyName', headerName: 'Company', width: '150', sortable: true },
+    { field: 'visitPurpose', headerName: 'Purpose', width: '200', sortable: true },
+    { field: 'meetingWith', headerName: 'Meeting With', width: '150', sortable: true },
+    { field: 'status', headerName: 'Status', width: '100', sortable: true },
+    { field: 'entryTime', headerName: 'Entry Time', width: '130', sortable: true },
+    { field: 'exitTime', headerName: 'Exit Time', width: '130', sortable: true },
+    { field: 'plantName', headerName: 'Plant', width: '130', sortable: true },
+    { field: 'requestTime', headerName: 'Request Time', width: '130', sortable: true },
   ],
 };
 
@@ -195,13 +129,7 @@ const getDashboardSummary = async () => {
     }),
   ]);
 
-  const headers = getHeadersForView('visitor_list').map((header) => ({
-    field: header.key,
-    headerName: header.label,
-    width: header.width,
-    sortable: header.sortable,
-  }));
-
+  const headers = getHeadersForView('visitor_list');
   return {
     summary: {
       todayVisitCount: todayVisits.length,

@@ -11,113 +11,26 @@
 
 const TABLE_HEADERS = {
   COMMON: [
-    {
-      key: 'name',
-      label: 'Name',
-      sortable: true,
-      getValue: (user) => user.name,
-    },
-    {
-      key: 'username',
-      label: 'Username',
-      sortable: true,
-      getValue: (user) => user.username,
-    },
-    {
-      key: 'mobile_number',
-      label: 'Mobile Number',
-      sortable: false,
-      getValue: (user) => user.mobile_number,
-    },
-    {
-      key: 'role',
-      label: 'Role',
-      sortable: true,
-      getValue: (user) => user.role.name,
-    },
+    { field: 'name', headerName: 'Name', width: '150', sortable: true },
+    { field: 'username', headerName: 'Username', width: '150', sortable: true },
+    { field: 'mobile_number', headerName: 'Mobile Number', width: '150', sortable: false },
+    { field: 'role', headerName: 'Role', width: '150', sortable: true },
   ],
 
   MAIN_VIEW: [
-    {
-      key: 'manager',
-      label: 'Manager',
-      sortable: false,
-      showIf: (user) => user.contractor?.manager || user.manager,
-      getValue: (user) => {
-        if (user.contractor?.manager) {
-          return user.contractor.manager.user.name;
-        }
-        if (user.manager) {
-          return user.manager.user.name;
-        }
-        return null;
-      },
-    },
-    {
-      key: 'firm_name',
-      label: 'Firm Name',
-      sortable: true,
-      showIf: (user) => user.contractor,
-      getValue: (user) => user.contractor?.firm_name,
-    },
-    {
-      key: 'contractors_count',
-      label: 'Contractors',
-      sortable: false,
-      showIf: (user) => user.manager,
-      getValue: (user) => user.manager?._count?.contractors || 0,
-    },
-    {
-      key: 'photos',
-      label: 'Photos',
-      sortable: false,
-      showIf: (user) => user.contractor?.photos || user.labour?.photos,
-      getValue: (user) => {
-        const photos = user.contractor?.photos || user.labour?.photos || [];
-        return photos.length;
-      },
-    },
-    {
-      key: 'pdfs',
-      label: 'Documents',
-      sortable: false,
-      showIf: (user) => user.contractor?.pdfs || user.labour?.pdfs,
-      getValue: (user) => {
-        const pdfs = user.contractor?.pdfs || user.labour?.pdfs || [];
-        return pdfs.length;
-      },
-    },
+    { field: 'manager', headerName: 'Manager', width: '150', sortable: false },
+    { field: 'firm_name', headerName: 'Firm Name', width: '150', sortable: true },
+    { field: 'contractors_count', headerName: 'Contractors', width: '150', sortable: false },
+    { field: 'photos', headerName: 'Photos', width: '150', sortable: false },
+    { field: 'pdfs', headerName: 'Documents', width: '150', sortable: false },
   ],
 
   PASSWORD_VIEW: [
-    {
-      key: 'plainPassword',
-      label: 'Password',
-      sortable: false,
-      getValue: (user) => {
-        return user.encryptedPlainPassword === '-'
-          ? '-'
-          : user.encryptedPlainPassword
-          ? decrypt(user.encryptedPlainPassword)
-          : null;
-      },
-    },
-    {
-      key: 'employeeNo',
-      label: 'Employee No',
-      sortable: true,
-      getValue: (user) => user.manager?.employeeNo || user.contractor?.employeeNo,
-    },
+    { field: 'plainPassword', headerName: 'Password', width: '150', sortable: false },
+    { field: 'employeeNo', headerName: 'Employee No', width: '150', sortable: true },
   ],
 
-  META: [
-    {
-      key: 'createdAt',
-      label: 'Created At',
-      sortable: true,
-      getValue: (user) => user.createdAt,
-    },
-  ],
+  META: [{ field: 'createdAt', headerName: 'Created At', width: '150', sortable: true }],
 };
 
 /**
