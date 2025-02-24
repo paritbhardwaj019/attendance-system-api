@@ -259,7 +259,6 @@ const fetchUsersHandler = async (filters = {}) => {
         },
       },
       employee: {
-        // Added employee selection
         select: {
           id: true,
           userId: true,
@@ -354,9 +353,15 @@ const fetchUsersHandler = async (filters = {}) => {
 
   const transformedUsers = users.map((user) => {
     const transformedUser = { id: user.id };
+
     visibleHeaders.forEach((header) => {
-      transformedUser[header.key] = header.getValue ? header.getValue(user) : user[header.key];
+      if (header.getValue) {
+        transformedUser[header.field] = header.getValue(user);
+      } else {
+        transformedUser[header.field] = user[header.field];
+      }
     });
+
     return transformedUser;
   });
 
