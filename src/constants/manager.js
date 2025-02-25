@@ -1,9 +1,9 @@
 const TABLE_HEADERS = {
   COMMON: [
+    { field: 'employeeNo', headerName: 'Employee No', width: '150', sortable: true },
     { field: 'name', headerName: 'Name', width: '150', sortable: true },
     { field: 'username', headerName: 'Username', width: '150', sortable: true },
     { field: 'mobile_number', headerName: 'Mobile Number', width: '150', sortable: false },
-    { field: 'employeeNo', headerName: 'Employee No', width: '150', sortable: true },
   ],
 
   CONTRACTOR: [

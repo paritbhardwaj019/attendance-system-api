@@ -12,11 +12,10 @@ const TABLE_HEADERS = {
   ],
 
   records: [
-    { field: 'ticketId', headerName: 'Ticket ID', width: '150', sortable: true },
+    { field: 'employeeNo', headerName: 'Employee No', width: '120', sortable: true },
     { field: 'mealName', headerName: 'Meal', width: '200', sortable: true },
     { field: 'quantity', headerName: 'Quantity', width: '100', sortable: true },
     { field: 'requestedBy', headerName: 'Requested By', width: '150', sortable: true },
-    { field: 'employeeNo', headerName: 'Employee No', width: '120', sortable: true },
     { field: 'plantName', headerName: 'Plant', width: '150', sortable: true },
     { field: 'serveTime', headerName: 'Serve Time', width: '180', sortable: true },
     { field: 'status', headerName: 'Status', width: '120', sortable: true },

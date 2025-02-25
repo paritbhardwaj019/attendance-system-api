@@ -11,6 +11,18 @@
 const TABLE_HEADERS = {
   COMMON: [
     {
+      field: 'employeeNo',
+      headerName: 'Employee No',
+      width: '150',
+      sortable: true,
+      getValue: (user) =>
+        user.admin?.employeeNo ||
+        user.manager?.employeeNo ||
+        user.contractor?.employeeNo ||
+        user.labour?.employeeNo ||
+        user.employee?.employeeNo,
+    },
+    {
       field: 'name',
       headerName: 'Name',
       width: '150',
@@ -37,18 +49,6 @@ const TABLE_HEADERS = {
       width: '150',
       sortable: true,
       getValue: (user) => user.role?.name,
-    },
-    {
-      field: 'employeeNo',
-      headerName: 'Employee No',
-      width: '150',
-      sortable: true,
-      getValue: (user) =>
-        user.admin?.employeeNo ||
-        user.manager?.employeeNo ||
-        user.contractor?.employeeNo ||
-        user.labour?.employeeNo ||
-        user.employee?.employeeNo,
     },
   ],
 
