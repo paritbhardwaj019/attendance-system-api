@@ -25,7 +25,9 @@ mealRouter
   .route('/request/:ticketId/entry')
   .post(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.EMPLOYEE]), mealController.handleMealEntry);
 
-mealRouter.route('/records').get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER]), mealController.getMealRecords);
+mealRouter
+  .route('/records')
+  .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.EMPLOYEE]), mealController.getMealRecords);
 
 mealRouter.route('/dashboard').get(checkJWT, mealController.getMealDashboard);
 

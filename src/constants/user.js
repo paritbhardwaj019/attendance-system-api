@@ -8,7 +8,6 @@
  *   getValue?: (user: any) => any
  * }>}
  */
-
 const TABLE_HEADERS = {
   COMMON: [
     {
@@ -38,6 +37,18 @@ const TABLE_HEADERS = {
       width: '150',
       sortable: true,
       getValue: (user) => user.role?.name,
+    },
+    {
+      field: 'employeeNo',
+      headerName: 'Employee No',
+      width: '150',
+      sortable: true,
+      getValue: (user) =>
+        user.admin?.employeeNo ||
+        user.manager?.employeeNo ||
+        user.contractor?.employeeNo ||
+        user.labour?.employeeNo ||
+        user.employee?.employeeNo,
     },
   ],
 
@@ -73,9 +84,10 @@ const TABLE_HEADERS = {
       getValue: (user) => {
         const contractorPhotos = user.contractor?.photos || [];
         const labourPhotos = user.labour?.photos || [];
-        return [...contractorPhotos, ...labourPhotos];
+        const employeePhotos = user.employee?.photos || [];
+        return [...contractorPhotos, ...labourPhotos, ...employeePhotos];
       },
-      showIf: (user) => Boolean(user.contractor || user.labour),
+      showIf: (user) => Boolean(user.contractor || user.labour || user.employee),
     },
     {
       field: 'pdfs',
@@ -89,6 +101,14 @@ const TABLE_HEADERS = {
       },
       showIf: (user) => Boolean(user.contractor || user.labour),
     },
+    {
+      field: 'email',
+      headerName: 'Email',
+      width: '200',
+      sortable: true,
+      getValue: (user) => user.employee?.email,
+      showIf: (user) => Boolean(user.employee),
+    },
   ],
 
   PASSWORD_VIEW: [
@@ -98,14 +118,6 @@ const TABLE_HEADERS = {
       width: '150',
       sortable: false,
       getValue: (user) => user.plainPassword,
-    },
-    {
-      field: 'employeeNo',
-      headerName: 'Employee No',
-      width: '150',
-      sortable: true,
-      getValue: (user) => user.employee?.employeeNo,
-      showIf: (user) => Boolean(user.employee),
     },
   ],
 

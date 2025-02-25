@@ -137,14 +137,26 @@ model User {
 }
 
 model Employee {
-  id          Int     @id @default(autoincrement())
-  user        User    @relation(fields: [userId], references: [id])
-  userId      Int     @unique
-  employeeNo  String  @unique
+  id          Int             @id @default(autoincrement())
+  user        User            @relation(fields: [userId], references: [id])
+  userId      Int             @unique
+  employeeNo  String          @unique
+  email       String?
   department  String?
   designation String?
   plantId     Int?
-  plant       Plant?  @relation(fields: [plantId], references: [id])
+  plant       Plant?          @relation(fields: [plantId], references: [id])
+  photos      EmployeePhoto[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EmployeePhoto {
+  id         Int      @id @default(autoincrement())
+  url        String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  employeeId Int
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

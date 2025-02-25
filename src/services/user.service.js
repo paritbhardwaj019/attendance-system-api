@@ -8,21 +8,32 @@ const { getNextCode } = require('./systemCode.service');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { TABLE_HEADERS, getHeadersForView } = require('../constants/user');
 const { connect } = require('mongoose');
+const s3Service = require('./s3.service');
 
 /**
  * Handler to create a new user.
  * @param {Object} data - Data for the new user.
  * @returns {Object} Created user without password.
  */
-const createUserHandler = async (data, loggedInUser) => {
-  console.log('DATA', data);
-
+const createUserHandler = async (data, loggedInUser, files) => {
   const existingUser = await db.user.findUnique({
     where: { username: data.username },
   });
 
   if (existingUser) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Username already taken');
+  }
+
+  let photoUrl = null;
+  if (files && files.photo && files.photo.length > 0) {
+    try {
+      const folder = data.user_type.toLowerCase();
+      photoUrl = await s3Service.uploadFileToS3(files.photo[0], folder);
+    } catch (error) {
+      throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to upload photo');
+    }
+  } else if (data.photo) {
+    photoUrl = data.photo;
   }
 
   return await db.$transaction(
@@ -50,7 +61,7 @@ const createUserHandler = async (data, loggedInUser) => {
 
       switch (data.user_type) {
         case ROLES.ADMIN:
-          employeeNo = await getNextCode('ADMIN');
+          employeeNo = data.employeeNo || (await getNextCode('ADMIN'));
           await prisma.admin.create({
             data: {
               user: { connect: { id: user.id } },
@@ -60,7 +71,7 @@ const createUserHandler = async (data, loggedInUser) => {
           break;
 
         case ROLES.MANAGER:
-          employeeNo = await getNextCode('MANAGER');
+          employeeNo = data.employeeNo || (await getNextCode('MANAGER'));
           await prisma.manager.create({
             data: {
               user: { connect: { id: user.id } },
@@ -74,8 +85,9 @@ const createUserHandler = async (data, loggedInUser) => {
             throw new ApiError(httpStatus.BAD_REQUEST, 'Aadhar number is required for Contractor');
           }
 
-          employeeNo = await getNextCode('CONTRACTOR');
-          await prisma.contractor.create({
+          employeeNo = data.employeeNo || (await getNextCode('CONTRACTOR'));
+
+          const contractor = await prisma.contractor.create({
             data: {
               user: { connect: { id: user.id } },
               firm_name: data.firm_name,
@@ -95,6 +107,15 @@ const createUserHandler = async (data, loggedInUser) => {
               ...(data.site_code && { siteCode: data.site_code }),
             },
           });
+
+          if (photoUrl) {
+            await prisma.contractorPhoto.create({
+              data: {
+                url: photoUrl,
+                contractor: { connect: { id: contractor.id } },
+              },
+            });
+          }
           break;
 
         case ROLES.LABOUR:
@@ -105,16 +126,16 @@ const createUserHandler = async (data, loggedInUser) => {
             );
           }
 
-          const contractor = await prisma.contractor.findUnique({
+          const labourContractor = await prisma.contractor.findUnique({
             where: { id: data.contractor_id },
           });
 
-          if (!contractor) {
+          if (!labourContractor) {
             throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid contractor ID');
           }
 
-          employeeNo = await getNextCode('LABOUR');
-          await prisma.labour.create({
+          employeeNo = data.employeeNo || (await getNextCode('LABOUR'));
+          const labour = await prisma.labour.create({
             data: {
               user: { connect: { id: user.id } },
               contractor: { connect: { id: data.contractor_id } },
@@ -125,6 +146,16 @@ const createUserHandler = async (data, loggedInUser) => {
               updatedBy: { connect: { id: loggedInUser.id } },
             },
           });
+
+          if (photoUrl) {
+            await prisma.labourPhoto.create({
+              data: {
+                url: photoUrl,
+                labour: { connect: { id: labour.id } },
+              },
+            });
+          }
+
           await cameraService.addUserToCamera(employeeNo, user.name);
           break;
 
@@ -138,20 +169,34 @@ const createUserHandler = async (data, loggedInUser) => {
             }
           }
 
-          employeeNo = await getNextCode('EMPLOYEE');
-          await prisma.employee.create({
-            data: {
-              user: { connect: { id: user.id } },
-              employeeNo,
-              department: data.department,
-              designation: data.designation,
-              ...(data.plant_id && {
-                plant: {
-                  connect: { id: data.plant_id },
-                },
-              }),
-            },
+          employeeNo = data.employeeNo || (await getNextCode('EMPLOYEE'));
+
+          const employeeData = {
+            user: { connect: { id: user.id } },
+            employeeNo,
+            department: data.department,
+            designation: data.designation,
+            email: data.email,
+            ...(data.plant_id && {
+              plant: {
+                connect: { id: data.plant_id },
+              },
+            }),
+          };
+
+          const employee = await prisma.employee.create({
+            data: employeeData,
           });
+
+          if (photoUrl) {
+            await prisma.employeePhoto.create({
+              data: {
+                url: photoUrl,
+                employee: { connect: { id: employee.id } },
+              },
+            });
+          }
+
           break;
 
         default:
@@ -168,10 +213,19 @@ const createUserHandler = async (data, loggedInUser) => {
             include: {
               manager: true,
               labour: true,
+              photos: true,
             },
           },
-          labour: true,
-          employee: true,
+          labour: {
+            include: {
+              photos: true,
+            },
+          },
+          employee: {
+            include: {
+              photos: true,
+            },
+          },
         },
       });
 
@@ -188,6 +242,7 @@ const createUserHandler = async (data, loggedInUser) => {
     }
   );
 };
+
 /**
  * Handler to fetch multiple users with filters, sorting, and pagination.
  * @param {Object} filters - Filters for fetching users.
@@ -237,6 +292,7 @@ const fetchUsersHandler = async (filters = {}) => {
       admin: {
         select: {
           id: true,
+          employeeNo: true,
           user: {
             select: {
               name: true,
@@ -247,6 +303,7 @@ const fetchUsersHandler = async (filters = {}) => {
       manager: {
         select: {
           id: true,
+          employeeNo: true,
           user: {
             select: {
               name: true,
@@ -266,12 +323,20 @@ const fetchUsersHandler = async (filters = {}) => {
           department: true,
           designation: true,
           plantId: true,
+          email: true,
+          photos: {
+            select: {
+              id: true,
+              url: true,
+            },
+          },
         },
       },
       contractor: {
         select: {
           id: true,
           userId: true,
+          employeeNo: true,
           firm_name: true,
           managerId: true,
           photos: {
@@ -306,6 +371,7 @@ const fetchUsersHandler = async (filters = {}) => {
         select: {
           id: true,
           userId: true,
+          employeeNo: true,
           contractorId: true,
           fingerprint_data: true,
           photos: {
