@@ -386,7 +386,7 @@ const listMealRequests = async (filters = {}, loggedInUser) => {
     headers = [
       ...headers,
       { field: 'process', headerName: 'Process', width: 150, sortable: false },
-      { field: 'handleEntry', headerName: 'Handle Entry', width: 150, sortable: false },
+      { field: 'delete', headerName: 'Delete', width: 150, sortable: false },
     ];
   }
 
@@ -442,11 +442,6 @@ const getMealRecords = async (startDate, endDate, plantId, loggedInUser) => {
     orderBy: { dateOfMeal: 'desc' },
   });
 
-  console.log(
-    'rECORDS',
-    records.map((el) => el.mealRequest.user)
-  );
-
   const flattenedRecords = records.map((record) => ({
     ...record,
     userName: record.mealRequest.user.name,
@@ -458,24 +453,19 @@ const getMealRecords = async (startDate, endDate, plantId, loggedInUser) => {
     },
   }));
 
-  let headers = [
-    ...getHeadersForView('records'),
-    { field: 'department', fieldName: 'Department', width: 150, sortable: true },
-    { field: 'designation', fieldName: 'Designation', width: 150, sortable: true },
-    { field: 'employeeNo', fieldName: 'Employee No', width: 120, sortable: true },
-  ];
+  let headers = getHeadersForView('records');
 
   if (['ADMIN', 'MANAGER'].includes(loggedInUser.role)) {
     headers = [
       ...headers,
-      { field: 'process', fieldName: 'Process', width: 150, sortable: false },
-      { field: 'handleEntry', fieldName: 'Handle Entry', width: 150, sortable: false },
+      { field: 'process', headerName: 'Process', width: 150, sortable: false },
+      { field: 'delete', headerName: 'Delete', width: 150, sortable: false },
     ];
   }
 
   return {
     headers,
-    data: transformData(flattenedRecords, 'records', loggedInUser),
+    data: transformData(flattenedRecords, 'records'),
   };
 };
 
@@ -571,6 +561,8 @@ const getMealDashboard = async () => {
     status: request.status,
   }));
 
+  const todayRequestsHeaders = getHeadersForView('dashboardRequests');
+
   return {
     summary: {
       todayApprovedMeals: todayApprovedCount,
@@ -578,7 +570,10 @@ const getMealDashboard = async () => {
       monthlyTotalRequests: monthlyTotalCount,
       todayTotalRequests: todayTotalCount,
     },
-    todayRequests: formattedRecentRequests,
+    todayRequests: {
+      headers: todayRequestsHeaders,
+      data: transformData(formattedRecentRequests, 'dashboardRequests'),
+    },
   };
 };
 

@@ -183,7 +183,10 @@ const getMealDashboard = async (filters = {}) => {
       params: filters,
     });
 
-    console.log('Meal dashboard data retrieved successfully:', response.data.data);
+    console.log('Meal dashboard data retrieved successfully:', response.data.data?.todayRequests.headers);
+    console.log('MEAL TODAY HEADERS', response.data.data?.todayRequests.headers);
+    console.log('MEAL TODAY DATA', response.data.data?.todayRequests.data);
+
     return response.data.data;
   } catch (error) {
     console.error('Error getting meal dashboard:', error.response ? error.response.data : error.message);
