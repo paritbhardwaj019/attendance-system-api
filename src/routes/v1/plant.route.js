@@ -8,27 +8,29 @@ const plantRouter = express.Router();
 
 plantRouter
   .route('/')
-  .post(checkJWT, checkRole([ROLES.ADMIN]), plantController.createPlant)
+  .post(checkJWT, checkRole([ROLES.ADMIN, ROLES.EMPLOYEE]), plantController.createPlant)
   .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER]), plantController.getPlants);
 
 plantRouter
   .route('/:id')
-  .put(checkJWT, checkRole([ROLES.ADMIN]), plantController.updatePlant)
-  .delete(checkJWT, checkRole([ROLES.ADMIN]), plantController.deletePlant);
+  .put(checkJWT, checkRole([ROLES.ADMIN, ROLES.EMPLOYEE]), plantController.updatePlant)
+  .delete(checkJWT, checkRole([ROLES.ADMIN, ROLES.EMPLOYEE]), plantController.deletePlant);
 
-plantRouter.route('/:id/members').post(checkJWT, checkRole([ROLES.ADMIN]), plantController.addPlantMember);
+plantRouter.route('/:id/members').post(checkJWT, checkRole([ROLES.ADMIN, ROLES.EMPLOYEE]), plantController.addPlantMember);
 
-plantRouter.route('/:id/members/:userId').delete(checkJWT, checkRole([ROLES.ADMIN]), plantController.removePlantMember);
+plantRouter
+  .route('/:id/members/:userId')
+  .delete(checkJWT, checkRole([ROLES.ADMIN, ROLES.EMPLOYEE]), plantController.removePlantMember);
 
 plantRouter
   .route('/:id/visitors')
-  .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER]), plantController.getPlantVisitorRequests);
+  .get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.EMPLOYEE]), plantController.getPlantVisitorRequests);
 
 plantRouter
   .route('/:id/access')
   .get(
     checkJWT,
-    checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR, ROLES.LABOUR, ROLES.VISITOR]),
+    checkRole([ROLES.ADMIN, ROLES.MANAGER, ROLES.CONTRACTOR, ROLES.LABOUR, ROLES.VISITOR, ROLES.EMPLOYEE]),
     plantController.checkPlantAccess
   );
 

@@ -169,6 +169,28 @@ const getMealRecords = async (filters = {}) => {
   }
 };
 
+/**
+ * Get meal dashboard data
+ * @param {Object} filters - Filters for fetching dashboard data
+ * @param {number} filters.plantId - Optional plant ID for filtering data
+ */
+const getMealDashboard = async (filters = {}) => {
+  if (!JWT_TOKEN) throw new Error('Please login first');
+
+  try {
+    const response = await axios.get(`${BASE_URL}/meals/dashboard`, {
+      headers: { 'x-auth-token': JWT_TOKEN },
+      params: filters,
+    });
+
+    console.log('Meal dashboard data retrieved successfully:', response.data.data);
+    return response.data.data;
+  } catch (error) {
+    console.error('Error getting meal dashboard:', error.response ? error.response.data : error.message);
+    throw error;
+  }
+};
+
 (async () => {
   try {
     const adminToken = await login('whynotparit', 'b14ck-cyph3R');
@@ -203,13 +225,16 @@ const getMealRecords = async (filters = {}) => {
     if (mealRequest.ticketId) {
       await processMealRequest(mealRequest.ticketId, 'APPROVED', 'Approved by admin', adminToken);
 
-      await handleMealEntry(mealRequest.ticketId);
+      // await handleMealEntry(mealRequest.ticketId);
 
       const records = await getMealRecords({
         startDate: '2025-02-15',
         endDate: '2025-02-25',
         plantId: createdPlant.id,
       });
+
+      const dashboardData = await getMealDashboard();
+      console.log('Dashboard data for all plants:', dashboardData);
 
       console.log('Test completed successfully');
     }

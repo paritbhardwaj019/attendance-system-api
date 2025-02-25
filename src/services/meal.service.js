@@ -189,6 +189,25 @@ const processMealRequest = async (ticketId, status, remarks, userId) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'Meal request not found');
   }
 
+  if (status === 'APPROVED') {
+    await db.mealEntry.create({
+      data: {
+        mealRequest: {
+          connect: {
+            id: mealRequest.id,
+          },
+        },
+        plant: {
+          connect: {
+            id: mealRequest.plantId,
+          },
+        },
+        dateOfMeal: new Date(),
+        serveTime: new Date(),
+      },
+    });
+  }
+
   return mealRequest;
 };
 
@@ -460,6 +479,109 @@ const getMealRecords = async (startDate, endDate, plantId, loggedInUser) => {
   };
 };
 
+/**
+ * Get meal dashboard data
+ * @returns {Object} Dashboard statistics
+ */
+const getMealDashboard = async () => {
+  const today = new Date();
+  const startOfToday = new Date(today.setHours(0, 0, 0, 0));
+  const endOfToday = new Date(today.setHours(23, 59, 59, 999));
+
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  const baseWhereClause = {};
+
+  const todayApprovedCount = await db.mealRequest.count({
+    where: {
+      ...baseWhereClause,
+      status: 'APPROVED',
+      requestTime: {
+        gte: startOfToday,
+        lte: endOfToday,
+      },
+    },
+  });
+
+  const pendingCount = await db.mealRequest.count({
+    where: {
+      ...baseWhereClause,
+      status: 'PENDING',
+    },
+  });
+
+  const monthlyTotalCount = await db.mealRequest.count({
+    where: {
+      ...baseWhereClause,
+      requestTime: {
+        gte: startOfMonth,
+        lte: endOfMonth,
+      },
+    },
+  });
+
+  const todayTotalCount = await db.mealRequest.count({
+    where: {
+      ...baseWhereClause,
+      requestTime: {
+        gte: startOfToday,
+        lte: endOfToday,
+      },
+    },
+  });
+
+  const recentMealRequests = await db.mealRequest.findMany({
+    where: {
+      ...baseWhereClause,
+      requestTime: {
+        gte: startOfToday,
+        lte: endOfToday,
+      },
+    },
+    include: {
+      meal: true,
+      user: {
+        select: {
+          name: true,
+          employee: {
+            select: {
+              department: true,
+              designation: true,
+            },
+          },
+        },
+      },
+      plant: true,
+    },
+    orderBy: {
+      requestTime: 'desc',
+    },
+    take: 5,
+  });
+
+  const formattedRecentRequests = recentMealRequests.map((request) => ({
+    id: request.id,
+    ticketId: request.ticketId,
+    mealName: request.meal.name,
+    userName: request.user.name,
+    department: request.user.employee?.department || 'N/A',
+    plantName: request.plant?.name || 'N/A',
+    requestTime: request.requestTime,
+    status: request.status,
+  }));
+
+  return {
+    summary: {
+      todayApprovedMeals: todayApprovedCount,
+      pendingMealRequests: pendingCount,
+      monthlyTotalRequests: monthlyTotalCount,
+      todayTotalRequests: todayTotalCount,
+    },
+    todayRequests: formattedRecentRequests,
+  };
+};
+
 const mealService = {
   createMeal,
   getMeals,
@@ -470,6 +592,7 @@ const mealService = {
   handleMealEntry,
   listMealRequests,
   getMealRecords,
+  getMealDashboard,
 };
 
 module.exports = mealService;

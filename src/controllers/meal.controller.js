@@ -71,6 +71,11 @@ const getMealRecords = catchAsync(async (req, res) => {
   res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Meal records retrieved', records));
 });
 
+const getMealDashboard = catchAsync(async (req, res) => {
+  const dashboardData = await mealService.getMealDashboard();
+  res.status(httpStatus.OK).json(ApiResponse.success(httpStatus.OK, 'Meal dashboard data retrieved', dashboardData));
+});
+
 const mealController = {
   createMeal,
   getMeals,
@@ -81,6 +86,7 @@ const mealController = {
   handleMealEntry,
   listMealRequests,
   getMealRecords,
+  getMealDashboard,
 };
 
 module.exports = mealController;

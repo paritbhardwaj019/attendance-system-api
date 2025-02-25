@@ -27,4 +27,6 @@ mealRouter
 
 mealRouter.route('/records').get(checkJWT, checkRole([ROLES.ADMIN, ROLES.MANAGER]), mealController.getMealRecords);
 
+mealRouter.route('/dashboard').get(checkJWT, mealController.getMealDashboard);
+
 module.exports = mealRouter;
